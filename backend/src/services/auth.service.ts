@@ -29,7 +29,8 @@ const issueTokens = (user: { id: string; email: string; organizationId: string |
 
 export const authService = {
   async register(payload: { name: string; email: string; password: string }) {
-    const existing = await prisma.user.findUnique({ where: { email: payload.email.toLowerCase() } });
+    const email = payload.email.toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
       throw new AppError('User already exists', 409);
@@ -40,11 +41,31 @@ export const authService = {
     const user = await prisma.user.create({
       data: {
         name: payload.name,
-        email: payload.email.toLowerCase(),
+        email,
         passwordHash,
         role: 'EMPLOYEE',
       },
     });
+
+    const existingEmployee = await prisma.employee.findUnique({ where: { email } });
+
+    if (existingEmployee) {
+      if (!existingEmployee.userId) {
+        await prisma.employee.update({ where: { id: existingEmployee.id }, data: { userId: user.id } });
+      }
+    } else {
+      const organization = await prisma.organization.findFirst();
+
+      await prisma.employee.create({
+        data: {
+          fullName: payload.name,
+          email,
+          organizationId: organization?.id,
+          userId: user.id,
+          status: 'ACTIVE',
+        },
+      });
+    }
 
     return {
       user: toPublicUser(user),
