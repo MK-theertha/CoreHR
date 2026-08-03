@@ -15,4 +15,18 @@ export const departmentController = {
 
     res.status(201).json({ success: true, data: department });
   }),
+
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const department = await departmentService.update(id, req.body);
+
+    res.json({ success: true, data: department });
+  }),
+
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const department = await departmentService.remove(id);
+
+    res.json({ success: true, data: department });
+  }),
 };

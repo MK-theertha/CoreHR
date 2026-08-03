@@ -16,5 +16,7 @@ router.use(protect);
 
 router.get('/', departmentController.list);
 router.post('/', authorize('SUPER_ADMIN', 'HR_ADMIN'), validate(departmentSchema), departmentController.create);
+router.patch('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN'), validate(departmentSchema.partial()), departmentController.update);
+router.delete('/:id', authorize('SUPER_ADMIN'), departmentController.remove);
 
 export default router;

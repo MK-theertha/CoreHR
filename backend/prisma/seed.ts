@@ -9,20 +9,6 @@ async function main() {
     create: { name: 'CoreHR', slug: 'corehr' },
   });
 
-  const roleNames = ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] as const;
-  const roles = Object.fromEntries(
-    await Promise.all(
-      roleNames.map(async (name) => {
-        const role = await prisma.role.upsert({
-          where: { name },
-          update: {},
-          create: { name },
-        });
-        return [name, role] as const;
-      }),
-    ),
-  );
-
   const engineering = await prisma.department.upsert({
     where: { id: 'dept-engineering' },
     update: {},
@@ -44,7 +30,7 @@ async function main() {
       name: 'System Administrator',
       email: 'admin@corehr.dev',
       passwordHash,
-      roleId: roles.SUPER_ADMIN.id,
+      role: 'SUPER_ADMIN',
       organizationId: organization.id,
     },
   });
@@ -71,7 +57,7 @@ async function main() {
       name: 'Daniel Ross',
       email: 'manager@corehr.dev',
       passwordHash: managerPasswordHash,
-      roleId: roles.MANAGER.id,
+      role: 'MANAGER',
       organizationId: organization.id,
     },
   });
@@ -98,7 +84,7 @@ async function main() {
       name: 'Alicia Morgan',
       email: 'alicia.morgan@corehr.dev',
       passwordHash: employeePasswordHash,
-      roleId: roles.EMPLOYEE.id,
+      role: 'EMPLOYEE',
       organizationId: organization.id,
     },
   });

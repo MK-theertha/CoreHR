@@ -70,6 +70,10 @@ export const leaveService = {
       throw new AppError('Only pending leave requests can be decided', 400);
     }
 
+    if (leaveRequest.employee.userId === approverUserId) {
+      throw new AppError('You cannot approve or reject your own leave request', 403);
+    }
+
     const updated = await prisma.leaveRequest.update({
       where: { id },
       data: { status, approvedBy: approverUserId, comments },

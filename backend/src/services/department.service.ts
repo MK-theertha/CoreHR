@@ -15,4 +15,24 @@ export const departmentService = {
 
     return prisma.department.create({ data: { name: payload.name, organizationId: organization.id } });
   },
+
+  async update(id: string, payload: { name: string }) {
+    const existing = await prisma.department.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new AppError('Department not found', 404);
+    }
+
+    return prisma.department.update({ where: { id }, data: { name: payload.name } });
+  },
+
+  async remove(id: string) {
+    const existing = await prisma.department.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new AppError('Department not found', 404);
+    }
+
+    return prisma.department.delete({ where: { id } });
+  },
 };

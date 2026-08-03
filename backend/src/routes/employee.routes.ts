@@ -32,7 +32,7 @@ router.get('/me', employeeController.getMe);
 router.patch('/me', validate(selfUpdateSchema), employeeController.updateMe);
 
 router.get('/', authorize('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'), employeeController.list);
-router.get('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'), employeeController.getById);
+router.get('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'), employeeController.getById);
 router.post('/', authorize('SUPER_ADMIN', 'HR_ADMIN'), validate(employeeSchema), employeeController.create);
 router.patch('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN'), validate(employeeSchema.partial()), employeeController.update);
 router.delete('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN'), employeeController.remove);

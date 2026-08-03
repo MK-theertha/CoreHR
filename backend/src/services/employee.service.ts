@@ -18,7 +18,21 @@ export type EmployeeInput = {
 const include = { department: true } as const;
 
 export const employeeService = {
-  list() {
+  async list(requestingUser: { id: string; role: string }) {
+    if (requestingUser.role === 'MANAGER') {
+      const managerEmployee = await prisma.employee.findUnique({ where: { userId: requestingUser.id } });
+
+      if (!managerEmployee?.departmentId) {
+        return [];
+      }
+
+      return prisma.employee.findMany({
+        where: { departmentId: managerEmployee.departmentId },
+        include,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
     return prisma.employee.findMany({ include, orderBy: { createdAt: 'desc' } });
   },
 

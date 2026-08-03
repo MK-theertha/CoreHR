@@ -10,19 +10,17 @@ export type AppRole = 'SUPER_ADMIN' | 'HR_ADMIN' | 'MANAGER' | 'EMPLOYEE';
 const signToken = (payload: Record<string, unknown>, secret: string, expiresIn: string) =>
   jwt.sign(payload, secret, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
 
-const withRole = { role: true } as const;
-
-const toPublicUser = (user: { id: string; name: string; email: string; organizationId: string | null; role: { name: AppRole } | null }) => ({
+const toPublicUser = (user: { id: string; name: string; email: string; organizationId: string | null; role: AppRole }) => ({
   id: user.id,
   name: user.name,
   email: user.email,
-  role: user.role?.name ?? 'EMPLOYEE',
+  role: user.role,
   organizationId: user.organizationId,
 });
 
-const issueTokens = (user: { id: string; email: string; organizationId: string | null; role: { name: AppRole } | null }) => ({
+const issueTokens = (user: { id: string; email: string; organizationId: string | null; role: AppRole }) => ({
   accessToken: signToken(
-    { sub: user.id, email: user.email, role: user.role?.name ?? 'EMPLOYEE', organizationId: user.organizationId },
+    { sub: user.id, email: user.email, role: user.role, organizationId: user.organizationId },
     env.JWT_ACCESS_SECRET,
     env.JWT_ACCESS_TTL,
   ),
@@ -37,7 +35,6 @@ export const authService = {
       throw new AppError('User already exists', 409);
     }
 
-    const role = await prisma.role.findUnique({ where: { name: 'EMPLOYEE' } });
     const passwordHash = await bcrypt.hash(payload.password, 10);
 
     const user = await prisma.user.create({
@@ -45,9 +42,8 @@ export const authService = {
         name: payload.name,
         email: payload.email.toLowerCase(),
         passwordHash,
-        roleId: role?.id,
+        role: 'EMPLOYEE',
       },
-      include: withRole,
     });
 
     return {
@@ -59,7 +55,6 @@ export const authService = {
   async login(payload: { email: string; password: string }) {
     const user = await prisma.user.findUnique({
       where: { email: payload.email.toLowerCase() },
-      include: withRole,
     });
 
     if (!user) {
@@ -81,7 +76,7 @@ export const authService = {
   async refresh(refreshToken: string) {
     try {
       const decoded = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { sub: string; type?: string };
-      const user = await prisma.user.findUnique({ where: { id: decoded.sub }, include: withRole });
+      const user = await prisma.user.findUnique({ where: { id: decoded.sub } });
 
       if (!user) {
         throw new AppError('User not found', 401);
@@ -94,7 +89,7 @@ export const authService = {
   },
 
   async getUserById(id: string) {
-    const user = await prisma.user.findUnique({ where: { id }, include: withRole });
+    const user = await prisma.user.findUnique({ where: { id } });
     return user ? toPublicUser(user) : null;
   },
 };

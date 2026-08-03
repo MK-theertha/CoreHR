@@ -13,6 +13,8 @@ import departmentRoutes from './routes/department.routes';
 import employeeRoutes from './routes/employee.routes';
 import leaveRoutes from './routes/leave.routes';
 import notificationRoutes from './routes/notification.routes';
+import organizationRoutes from './routes/organization.routes';
+import reportsRoutes from './routes/reports.routes';
 import userRoutes from './routes/user.routes';
 
 const app = express();
@@ -57,6 +59,8 @@ app.use('/api/v1/departments', departmentRoutes);
 app.use('/api/v1/leave', leaveRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/reports', reportsRoutes);
+app.use('/api/v1/organization', organizationRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(errorHandler);

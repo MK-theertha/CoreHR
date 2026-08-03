@@ -38,21 +38,12 @@ model Organization {
   departments Department[]
 }
 
-model Role {
-  id          String   @id @default(cuid())
-  name        RoleName @unique
-  description String?
-  createdAt   DateTime @default(now())
-  users       User[]
-}
-
 model User {
   id             String   @id @default(cuid())
   name           String
   email          String   @unique
   passwordHash   String
-  roleId         String?
-  role           Role?    @relation(fields: [roleId], references: [id])
+  role           RoleName @default(EMPLOYEE)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   createdAt      DateTime @default(now())

@@ -5,8 +5,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/appError';
 
 export const employeeController = {
-  list: asyncHandler(async (_req: Request, res: Response) => {
-    const employees = await employeeService.list();
+  list: asyncHandler(async (req: Request, res: Response) => {
+    const employees = await employeeService.list(req.user!);
 
     res.json({ success: true, data: employees });
   }),
