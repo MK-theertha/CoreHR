@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-type LoginPageProps = {
-  onLogin: (email: string, password: string) => Promise<void>;
+type SignupPageProps = {
+  onSignup: (name: string, email: string, password: string) => Promise<void>;
 };
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+export default function SignupPage({ onSignup }: SignupPageProps) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@corehr.dev');
-  const [password, setPassword] = useState('Admin@123');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,10 +19,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setIsSubmitting(true);
 
     try {
-      await onLogin(email, password);
+      await onSignup(name, email, password);
       navigate('/dashboard');
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Unable to sign in. Please try again.');
+    } catch (signupError) {
+      setError(signupError instanceof Error ? signupError.message : 'Unable to sign up. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -35,10 +36,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             CH
           </div>
           <h1 className="text-2xl font-bold text-slate-900">CoreHR</h1>
-          <p className="mt-2 text-sm text-slate-500">Employee management and compliance platform</p>
+          <p className="mt-2 text-sm text-slate-500">Create your account</p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Full name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
+            />
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
             <input
@@ -57,6 +68,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
             />
+            <p className="mt-1 text-xs text-slate-400">Must be at least 8 characters.</p>
           </div>
 
           {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
@@ -66,30 +78,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             disabled={isSubmitting}
             className="w-full rounded-xl bg-corehr-600 px-4 py-3 font-semibold text-white transition hover:bg-corehr-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
+            {isSubmitting ? 'Creating account...' : 'Sign up'}
           </button>
         </form>
 
-        <div className="mt-6 flex items-center justify-between text-xs text-slate-500">
-          <button type="button" className="hover:text-slate-700">
-            Forgot password?
-          </button>
-          <button
-            type="button"
-            className="hover:text-slate-700"
-            onClick={() => {
-              setEmail('admin@corehr.dev');
-              setPassword('Admin@123');
-            }}
-          >
-            Use demo account
-          </button>
-        </div>
-
-        <div className="mt-4 text-center text-xs text-slate-500">
-          Don&apos;t have an account?{' '}
-          <Link to="/signup" className="font-medium text-corehr-600 hover:text-corehr-500">
-            Sign up
+        <div className="mt-6 text-center text-xs text-slate-500">
+          Already have an account?{' '}
+          <Link to="/login" className="font-medium text-corehr-600 hover:text-corehr-500">
+            Sign in
           </Link>
         </div>
       </div>

@@ -9,6 +9,7 @@ import LeavePage from './pages/LeavePage';
 import LoginPage from './pages/LoginPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
+import SignupPage from './pages/SignupPage';
 import type { AppUser } from './types';
 
 const navItems = [
@@ -160,6 +161,30 @@ function App() {
     });
   };
 
+  const handleSignup = async (name: string, email: string, password: string) => {
+    const response = await apiFetch<{
+      success: boolean;
+      data: {
+        user: { id: string; name: string; email: string; role: AppUser['role'] };
+        accessToken: string;
+        refreshToken: string;
+      };
+    }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    const { user: registeredUser, accessToken, refreshToken } = response.data;
+
+    setTokens(accessToken, refreshToken);
+    setUser({
+      id: registeredUser.id,
+      name: registeredUser.name,
+      email: registeredUser.email,
+      role: registeredUser.role,
+    });
+  };
+
   if (!isAuthReady) {
     return null;
   }
@@ -168,6 +193,7 @@ function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+        <Route path="/signup" element={<SignupPage onSignup={handleSignup} />} />
         <Route path="*" element={<Navigate to="/login" state={{ from: location }} replace />} />
       </Routes>
     );
@@ -176,6 +202,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/signup" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<AppShell user={user} onLogout={logout} />} />
     </Routes>
   );
