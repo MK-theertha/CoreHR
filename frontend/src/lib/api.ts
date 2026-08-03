@@ -6,21 +6,28 @@ const REFRESH_TOKEN_KEY = 'corehr-refresh-token';
 export const UNAUTHORIZED_EVENT = 'corehr:unauthorized';
 
 export function getAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? sessionStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return localStorage.getItem(REFRESH_TOKEN_KEY) ?? sessionStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
-export function setTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+export function setTokens(accessToken: string, refreshToken: string, remember = true) {
+  const store = remember ? localStorage : sessionStorage;
+  const other = remember ? sessionStorage : localStorage;
+
+  store.setItem(ACCESS_TOKEN_KEY, accessToken);
+  store.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  other.removeItem(ACCESS_TOKEN_KEY);
+  other.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 async function parseErrorMessage(response: Response) {
@@ -68,7 +75,8 @@ async function tryRefreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
 
-    localStorage.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
+    const store = localStorage.getItem(REFRESH_TOKEN_KEY) ? localStorage : sessionStorage;
+    store.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
     return response.data.accessToken;
   } catch {
     return null;

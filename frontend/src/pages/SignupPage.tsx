@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { AuthLayout } from '../components/layout/auth-layout';
+import { Button } from '../components/ui/button';
+import { ErrorBanner } from '../components/ui/error-banner';
+import { FormField } from '../components/ui/form-field';
+import { Input } from '../components/ui/input';
+
 type SignupPageProps = {
   onSignup: (name: string, email: string, password: string) => Promise<void>;
 };
@@ -29,66 +35,33 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-corehr-50 font-bold text-corehr-600">
-            CH
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">CoreHR</h1>
-          <p className="mt-2 text-sm text-slate-500">Create your account</p>
-        </div>
+    <AuthLayout title="Create your account" subtitle="Get started with your CoreHR workspace">
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <FormField label="Full name" htmlFor="name">
+          <Input id="name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </FormField>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Full name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
-            />
-          </div>
+        <FormField label="Email" htmlFor="email">
+          <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        </FormField>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
-            />
-          </div>
+        <FormField label="Password" htmlFor="password" hint="Must be at least 8 characters.">
+          <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        </FormField>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
-            />
-            <p className="mt-1 text-xs text-slate-400">Must be at least 8 characters.</p>
-          </div>
+        {error ? <ErrorBanner message={error} /> : null}
 
-          {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating account...' : 'Sign up'}
+        </Button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-xl bg-corehr-600 px-4 py-3 font-semibold text-white transition hover:bg-corehr-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? 'Creating account...' : 'Sign up'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-xs text-slate-500">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-corehr-600 hover:text-corehr-500">
-            Sign in
-          </Link>
-        </div>
-      </div>
-    </div>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium text-primary hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }

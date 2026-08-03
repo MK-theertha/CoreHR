@@ -20,10 +20,11 @@ function useInvalidateLeave() {
   };
 }
 
-export function useLeaveRequests() {
+export function useLeaveRequests(employeeId?: string) {
   return useQuery({
-    queryKey: ['leave'],
-    queryFn: () => authFetch<ApiResponse<LeaveRequest[]>>('/leave').then((res) => res.data),
+    queryKey: ['leave', employeeId ?? 'all'],
+    queryFn: () =>
+      authFetch<ApiResponse<LeaveRequest[]>>(`/leave${employeeId ? `?employeeId=${employeeId}` : ''}`).then((res) => res.data),
   });
 }
 

@@ -10,6 +10,13 @@ export const departmentController = {
     res.json({ success: true, data: departments });
   }),
 
+  getOne: asyncHandler(async (req: Request, res: Response) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const department = await departmentService.getById(id);
+
+    res.json({ success: true, data: department });
+  }),
+
   create: asyncHandler(async (req: Request, res: Response) => {
     const department = await departmentService.create(req.body);
 

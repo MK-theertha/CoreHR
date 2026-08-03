@@ -22,6 +22,14 @@ export function useEmployees() {
   });
 }
 
+export function useEmployee(id: string | undefined) {
+  return useQuery({
+    queryKey: ['employees', id],
+    queryFn: () => authFetch<ApiResponse<Employee>>(`/employees/${id}`).then((res) => res.data),
+    enabled: !!id,
+  });
+}
+
 export function useCreateEmployee() {
   const queryClient = useQueryClient();
 

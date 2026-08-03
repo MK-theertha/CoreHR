@@ -1,169 +1,108 @@
-import { useEffect, useState } from 'react';
-
+import { ActivityTab } from '../components/profile/activity-tab';
+import { DocumentsTab } from '../components/profile/documents-tab';
+import { EmploymentTab } from '../components/profile/employment-tab';
+import { LeaveHistoryTab } from '../components/profile/leave-history-tab';
+import { NotesTab } from '../components/profile/notes-tab';
+import { OverviewTab } from '../components/profile/overview-tab';
+import { PersonalTab } from '../components/profile/personal-tab';
+import { EmploymentStatusBadge } from '../components/shared/status-badge';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { ErrorBanner } from '../components/ui/error-banner';
+import { PageHeader } from '../components/ui/page-header';
+import { Skeleton } from '../components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useLeaveRequests } from '../hooks/useLeave';
 import { useMyProfile, useUpdateMyProfile } from '../hooks/useProfile';
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-function toDateInputValue(value: string | null) {
-  return value ? value.slice(0, 10) : '';
-}
+import { initials } from '../lib/format';
 
 export default function ProfilePage() {
   const { data: employee, isLoading, isError, error } = useMyProfile();
   const updateProfile = useUpdateMyProfile();
-  const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState({ phone: '', gender: '', dateOfBirth: '' });
-
-  useEffect(() => {
-    if (employee) {
-      setForm({
-        phone: employee.phone ?? '',
-        gender: employee.gender ?? '',
-        dateOfBirth: toDateInputValue(employee.dateOfBirth),
-      });
-    }
-  }, [employee]);
+  const { data: leaveRequests, isLoading: isLoadingLeave } = useLeaveRequests();
 
   if (isLoading) {
-    return <p className="text-sm text-slate-500">Loading profile...</p>;
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+    );
   }
 
   if (isError || !employee) {
     return (
       <div className="space-y-6">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-corehr-600">Profile</p>
-          <h2 className="mt-2 text-3xl font-bold text-slate-900">Employee profile</h2>
-        </div>
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          {isError ? (error as Error).message : 'No employee profile is linked to this account.'}
-        </p>
+        <PageHeader eyebrow="Profile" title="Employee profile" />
+        <ErrorBanner message={isError ? (error as Error).message : 'No employee profile is linked to this account.'} />
       </div>
     );
   }
 
-  const handleSave = () => {
-    updateProfile.mutate(
-      { phone: form.phone || undefined, gender: form.gender || undefined, dateOfBirth: form.dateOfBirth || undefined },
-      { onSuccess: () => setIsEditing(false) },
-    );
-  };
-
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-corehr-600">Profile</p>
-        <h2 className="mt-2 text-3xl font-bold text-slate-900">Employee profile</h2>
-      </div>
+      <PageHeader eyebrow="Profile" title="My profile" />
 
-      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-corehr-50 text-2xl font-bold text-corehr-600">
-            {initials(employee.fullName)}
-          </div>
-          <h3 className="mt-5 text-xl font-semibold text-slate-900">{employee.fullName}</h3>
-          <p className="text-sm text-slate-500">{employee.jobTitle ?? '—'}</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Details</h4>
-            {!isEditing ? (
-              <button onClick={() => setIsEditing(true)} className="text-sm font-semibold text-corehr-600 hover:text-corehr-500">
-                Edit
-              </button>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Email</label>
-              <p className="mt-2 text-sm text-slate-700">{employee.email}</p>
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+          <Avatar className="h-20 w-20">
+            <AvatarFallback className="text-xl">{initials(employee.fullName)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold text-foreground">{employee.fullName}</h2>
+              <EmploymentStatusBadge status={employee.status} />
             </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Department</label>
-              <p className="mt-2 text-sm text-slate-700">{employee.department?.name ?? '—'}</p>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</label>
-              <p className="mt-2 text-sm text-slate-700">{employee.status}</p>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Phone</label>
-              {isEditing ? (
-                <input
-                  value={form.phone}
-                  onChange={(event) => setForm({ ...form, phone: event.target.value })}
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-corehr-500"
-                />
-              ) : (
-                <p className="mt-2 text-sm text-slate-700">{employee.phone ?? '—'}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Gender</label>
-              {isEditing ? (
-                <input
-                  value={form.gender}
-                  onChange={(event) => setForm({ ...form, gender: event.target.value })}
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-corehr-500"
-                />
-              ) : (
-                <p className="mt-2 text-sm text-slate-700">{employee.gender ?? '—'}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Date of birth</label>
-              {isEditing ? (
-                <input
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })}
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-corehr-500"
-                />
-              ) : (
-                <p className="mt-2 text-sm text-slate-700">
-                  {employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString() : '—'}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {updateProfile.isError ? (
-            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {(updateProfile.error as Error).message}
+            <p className="mt-1 text-sm text-muted-foreground">
+              {employee.jobTitle ?? 'No title set'} {employee.department ? `· ${employee.department.name}` : ''}
             </p>
-          ) : null}
-
-          {isEditing ? (
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setIsEditing(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={updateProfile.isPending}
-                className="rounded-xl bg-corehr-600 px-4 py-2 text-sm font-semibold text-white hover:bg-corehr-500 disabled:opacity-60"
-              >
-                {updateProfile.isPending ? 'Saving...' : 'Save changes'}
-              </button>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>{employee.email}</span>
+              {employee.phone ? <span>{employee.phone}</span> : null}
             </div>
-          ) : null}
+          </div>
         </div>
       </div>
+
+      <Tabs defaultValue="overview">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="personal">Personal</TabsTrigger>
+          <TabsTrigger value="employment">Employment</TabsTrigger>
+          <TabsTrigger value="leave">Leave History</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <OverviewTab employee={employee} leaveRequests={leaveRequests ?? []} />
+        </TabsContent>
+        <TabsContent value="personal">
+          <PersonalTab
+            employee={employee}
+            canEdit
+            onSave={(values) => updateProfile.mutateAsync(values).then(() => undefined)}
+            isSaving={updateProfile.isPending}
+            saveError={updateProfile.error as Error | null}
+          />
+        </TabsContent>
+        <TabsContent value="employment">
+          <EmploymentTab employee={employee} />
+        </TabsContent>
+        <TabsContent value="leave">
+          <LeaveHistoryTab leaveRequests={leaveRequests ?? []} isLoading={isLoadingLeave} />
+        </TabsContent>
+        <TabsContent value="documents">
+          <DocumentsTab />
+        </TabsContent>
+        <TabsContent value="activity">
+          <ActivityTab />
+        </TabsContent>
+        <TabsContent value="notes">
+          <NotesTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

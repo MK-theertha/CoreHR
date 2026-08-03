@@ -11,9 +11,13 @@ const include = {
 const canManageLeave = (role: string) => ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'].includes(role);
 
 export const leaveService = {
-  async listForUser(user: { id: string; role: string }) {
+  async listForUser(user: { id: string; role: string }, employeeId?: string) {
     if (canManageLeave(user.role)) {
-      return prisma.leaveRequest.findMany({ include, orderBy: { createdAt: 'desc' } });
+      return prisma.leaveRequest.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        include,
+        orderBy: { createdAt: 'desc' },
+      });
     }
 
     const employee = await prisma.employee.findUnique({ where: { userId: user.id } });

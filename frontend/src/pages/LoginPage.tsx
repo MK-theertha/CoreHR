@@ -1,14 +1,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { AuthLayout } from '../components/layout/auth-layout';
+import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
+import { ErrorBanner } from '../components/ui/error-banner';
+import { FormField } from '../components/ui/form-field';
+import { Input } from '../components/ui/input';
+
 type LoginPageProps = {
-  onLogin: (email: string, password: string) => Promise<void>;
+  onLogin: (email: string, password: string, remember?: boolean) => Promise<void>;
 };
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   const [email, setEmail] = useState('admin@corehr.dev');
   const [password, setPassword] = useState('Admin@123');
+  const [remember, setRemember] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,7 +26,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setIsSubmitting(true);
 
     try {
-      await onLogin(email, password);
+      await onLogin(email, password, remember);
       navigate('/dashboard');
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Unable to sign in. Please try again.');
@@ -28,71 +36,51 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-corehr-50 font-bold text-corehr-600">
-            CH
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">CoreHR</h1>
-          <p className="mt-2 text-sm text-slate-500">Employee management and compliance platform</p>
-        </div>
+    <AuthLayout title="Welcome back" subtitle="Sign in to your CoreHR workspace">
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <FormField label="Email" htmlFor="email">
+          <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoFocus />
+        </FormField>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
-            />
-          </div>
+        <FormField label="Password" htmlFor="password">
+          <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        </FormField>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
-            />
-          </div>
-
-          {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-xl bg-corehr-600 px-4 py-3 font-semibold text-white transition hover:bg-corehr-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        <div className="mt-6 flex items-center justify-between text-xs text-slate-500">
-          <button type="button" className="hover:text-slate-700">
+        <div className="flex items-center justify-between text-sm">
+          <label className="flex items-center gap-2 text-muted-foreground">
+            <Checkbox checked={remember} onCheckedChange={(checked) => setRemember(!!checked)} />
+            Remember me
+          </label>
+          <button type="button" className="font-medium text-primary hover:underline">
             Forgot password?
           </button>
-          <button
-            type="button"
-            className="hover:text-slate-700"
-            onClick={() => {
-              setEmail('admin@corehr.dev');
-              setPassword('Admin@123');
-            }}
-          >
-            Use demo account
-          </button>
         </div>
 
-        <div className="mt-4 text-center text-xs text-slate-500">
-          Don&apos;t have an account?{' '}
-          <Link to="/signup" className="font-medium text-corehr-600 hover:text-corehr-500">
-            Sign up
-          </Link>
-        </div>
-      </div>
-    </div>
+        {error ? <ErrorBanner message={error} /> : null}
+
+        <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+          {isSubmitting ? 'Signing in...' : 'Sign in'}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            setEmail('admin@corehr.dev');
+            setPassword('Admin@123');
+          }}
+        >
+          Use demo account
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{' '}
+        <Link to="/signup" className="font-medium text-primary hover:underline">
+          Sign up
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }

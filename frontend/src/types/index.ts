@@ -14,6 +14,8 @@ export type Department = {
   name: string;
   organizationId: string;
   createdAt: string;
+  employeeCount: number;
+  manager: { id: string; fullName: string; email: string } | null;
 };
 
 export type Employee = {
@@ -73,7 +75,11 @@ export type DashboardSummary =
       scope: 'ORGANIZATION';
       totalEmployees: number;
       activeEmployees: number;
+      departmentsCount: number;
       pendingLeaveRequests: number;
+      approvedLeaveRequests: number;
+      rejectedLeaveRequests: number;
+      newEmployees: number;
       departmentBreakdown: { name: string; employeeCount: number }[];
     }
   | {
@@ -82,6 +88,34 @@ export type DashboardSummary =
       myApprovedLeaveRequests: number;
       unreadNotifications: number;
     };
+
+export type DashboardTrends = {
+  employeeGrowth: { month: string; count: number }[];
+  monthlyHiring: { month: string; count: number }[];
+  leaveTrends: { month: string; PENDING: number; APPROVED: number; REJECTED: number; CANCELLED: number }[];
+};
+
+export type ActivityItem = {
+  id: string;
+  type: 'LEAVE_DECISION' | 'EMPLOYEE_CREATED';
+  message: string;
+  timestamp: string;
+};
+
+export type ReportsSummary = {
+  departmentBreakdown: { name: string; employeeCount: number }[];
+  employeesByStatus: { status: EmploymentStatus; count: number }[];
+  leaveRequestsByStatus: { status: LeaveStatus; count: number }[];
+  usersByRole: { role: UserRole; count: number }[];
+};
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type ApiResponse<T> = {
   success: boolean;

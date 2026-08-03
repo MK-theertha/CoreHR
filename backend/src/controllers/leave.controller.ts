@@ -5,7 +5,9 @@ import { asyncHandler } from '../utils/asyncHandler';
 
 export const leaveController = {
   list: asyncHandler(async (req: Request, res: Response) => {
-    const leaveRequests = await leaveService.listForUser(req.user!);
+    const rawEmployeeId = Array.isArray(req.query.employeeId) ? req.query.employeeId[0] : req.query.employeeId;
+    const employeeId = typeof rawEmployeeId === 'string' ? rawEmployeeId : undefined;
+    const leaveRequests = await leaveService.listForUser(req.user!, employeeId);
 
     res.json({ success: true, data: leaveRequests });
   }),
