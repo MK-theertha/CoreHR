@@ -1,82 +1,92 @@
+import { prisma } from '../config/prisma';
 import { AppError } from '../utils/appError';
 
 export type EmployeeStatus = 'ACTIVE' | 'PROBATION' | 'INACTIVE' | 'TERMINATED';
 
-export type EmployeeRecord = {
-  id: string;
+export type EmployeeInput = {
   fullName: string;
   email: string;
-  department: string;
-  jobTitle: string;
-  status: EmployeeStatus;
-  managerId?: string;
-  organizationId: string;
+  departmentId?: string | null;
+  jobTitle?: string;
+  status?: EmployeeStatus;
+  phone?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  joiningDate?: string;
 };
 
-const employees: EmployeeRecord[] = [
-  {
-    id: 'emp-1001',
-    fullName: 'Alicia Morgan',
-    email: 'alicia.morgan@corehr.dev',
-    department: 'Engineering',
-    jobTitle: 'Senior Frontend Engineer',
-    status: 'ACTIVE',
-    organizationId: 'org-corehr',
-  },
-  {
-    id: 'emp-1002',
-    fullName: 'Daniel Ross',
-    email: 'daniel.ross@corehr.dev',
-    department: 'People Ops',
-    jobTitle: 'HR Manager',
-    status: 'ACTIVE',
-    organizationId: 'org-corehr',
-  },
-];
+const include = { department: true } as const;
 
 export const employeeService = {
   list() {
-    return employees;
+    return prisma.employee.findMany({ include, orderBy: { createdAt: 'desc' } });
   },
 
   getById(id: string) {
-    return employees.find((employee) => employee.id === id) ?? null;
+    return prisma.employee.findUnique({ where: { id }, include });
   },
 
-  create(payload: Omit<EmployeeRecord, 'id' | 'organizationId'>) {
-    const nextEmployee: EmployeeRecord = {
-      id: `emp-${Date.now()}`,
-      organizationId: 'org-corehr',
-      ...payload,
-    };
-
-    employees.push(nextEmployee);
-    return nextEmployee;
+  getByUserId(userId: string) {
+    return prisma.employee.findUnique({ where: { userId }, include });
   },
 
-  update(id: string, payload: Partial<EmployeeRecord>) {
-    const employeeIndex = employees.findIndex((employee) => employee.id === id);
+  async create(payload: EmployeeInput) {
+    const existing = await prisma.employee.findUnique({ where: { email: payload.email } });
 
-    if (employeeIndex === -1) {
+    if (existing) {
+      throw new AppError('An employee with this email already exists', 409);
+    }
+
+    const organization = await prisma.organization.findFirst();
+
+    return prisma.employee.create({
+      data: {
+        fullName: payload.fullName,
+        email: payload.email,
+        organizationId: organization?.id,
+        departmentId: payload.departmentId || undefined,
+        jobTitle: payload.jobTitle,
+        status: payload.status ?? 'ACTIVE',
+        phone: payload.phone,
+        gender: payload.gender,
+        dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth) : undefined,
+        joiningDate: payload.joiningDate ? new Date(payload.joiningDate) : undefined,
+      },
+      include,
+    });
+  },
+
+  async update(id: string, payload: Partial<EmployeeInput>) {
+    const existing = await prisma.employee.findUnique({ where: { id } });
+
+    if (!existing) {
       throw new AppError('Employee not found', 404);
     }
 
-    employees[employeeIndex] = {
-      ...employees[employeeIndex],
-      ...payload,
-    };
-
-    return employees[employeeIndex];
+    return prisma.employee.update({
+      where: { id },
+      data: {
+        ...(payload.fullName !== undefined && { fullName: payload.fullName }),
+        ...(payload.email !== undefined && { email: payload.email }),
+        ...(payload.departmentId !== undefined && { departmentId: payload.departmentId || null }),
+        ...(payload.jobTitle !== undefined && { jobTitle: payload.jobTitle }),
+        ...(payload.status !== undefined && { status: payload.status }),
+        ...(payload.phone !== undefined && { phone: payload.phone }),
+        ...(payload.gender !== undefined && { gender: payload.gender }),
+        ...(payload.dateOfBirth !== undefined && { dateOfBirth: new Date(payload.dateOfBirth) }),
+        ...(payload.joiningDate !== undefined && { joiningDate: new Date(payload.joiningDate) }),
+      },
+      include,
+    });
   },
 
-  remove(id: string) {
-    const index = employees.findIndex((employee) => employee.id === id);
+  async remove(id: string) {
+    const existing = await prisma.employee.findUnique({ where: { id } });
 
-    if (index === -1) {
+    if (!existing) {
       throw new AppError('Employee not found', 404);
     }
 
-    const [removed] = employees.splice(index, 1);
-    return removed;
+    return prisma.employee.delete({ where: { id } });
   },
 };

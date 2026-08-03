@@ -11,13 +11,25 @@ const router = Router();
 const employeeSchema = z.object({
   fullName: z.string().min(2).max(120),
   email: z.email(),
-  department: z.string().min(2).max(80),
-  jobTitle: z.string().min(2).max(80),
+  departmentId: z.string().optional().nullable(),
+  jobTitle: z.string().max(80).optional(),
   status: z.enum(['ACTIVE', 'PROBATION', 'INACTIVE', 'TERMINATED']).default('ACTIVE'),
-  managerId: z.string().optional(),
+  phone: z.string().max(30).optional(),
+  gender: z.string().max(30).optional(),
+  dateOfBirth: z.string().optional(),
+  joiningDate: z.string().optional(),
+});
+
+const selfUpdateSchema = z.object({
+  phone: z.string().max(30).optional(),
+  gender: z.string().max(30).optional(),
+  dateOfBirth: z.string().optional(),
 });
 
 router.use(protect);
+
+router.get('/me', employeeController.getMe);
+router.patch('/me', validate(selfUpdateSchema), employeeController.updateMe);
 
 router.get('/', authorize('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'), employeeController.list);
 router.get('/:id', authorize('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'), employeeController.getById);

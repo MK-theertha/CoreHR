@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { apiFetch } from './lib/api';
+import { AuthContext } from './hooks/useAuth';
+import { apiFetch, authFetch, clearTokens, getAccessToken, setTokens, UNAUTHORIZED_EVENT } from './lib/api';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import LeavePage from './pages/LeavePage';
@@ -18,107 +19,119 @@ const navItems = [
   { label: 'Profile', to: '/profile', roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
 ];
 
-function AppShell({ user }: { user: AppUser | null }) {
+function AppShell({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const location = useLocation();
-  const visibleNav = useMemo(
-    () => navItems.filter((item) => user && item.roles.includes(user.role)),
-    [user],
-  );
-
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+  const visibleNav = useMemo(() => navItems.filter((item) => item.roles.includes(user.role)), [user]);
+  const activeLabel = visibleNav.find((item) => location.pathname.startsWith(item.to))?.label ?? 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 w-64 border-r border-slate-200 bg-slate-900 text-slate-100">
-        <div className="flex items-center gap-3 border-b border-slate-700 px-6 py-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-corehr-500 font-bold text-white">CH</div>
-          <div>
-            <p className="text-lg font-semibold">CoreHR</p>
-            <p className="text-xs text-slate-400">Workforce suite</p>
+    <AuthContext.Provider value={{ user, logout: onLogout }}>
+      <div className="min-h-screen bg-slate-100 text-slate-900">
+        <aside className="fixed inset-y-0 left-0 w-64 border-r border-slate-200 bg-slate-900 text-slate-100">
+          <div className="flex items-center gap-3 border-b border-slate-700 px-6 py-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-corehr-500 font-bold text-white">CH</div>
+            <div>
+              <p className="text-lg font-semibold">CoreHR</p>
+              <p className="text-xs text-slate-400">Workforce suite</p>
+            </div>
           </div>
-        </div>
 
-        <nav className="mt-8 space-y-2 px-4">
-          {visibleNav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`
-              }
+          <nav className="mt-8 space-y-2 px-4">
+            {visibleNav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                    isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700 p-4">
+            <p className="text-sm font-medium text-white">{user.name}</p>
+            <p className="text-xs text-slate-400">{user.role}</p>
+          </div>
+        </aside>
+
+        <main className="ml-64 p-8">
+          <header className="mb-8 flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-sm uppercase tracking-[0.2em] text-corehr-600">Operations</p>
+              <h1 className="mt-1 text-2xl font-bold text-slate-900">{activeLabel}</h1>
+            </div>
+            <button
+              onClick={onLogout}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+              Sign out
+            </button>
+          </header>
 
-        <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700 p-4">
-          <p className="text-sm font-medium text-white">{user.name}</p>
-          <p className="text-xs text-slate-400">{user.role}</p>
-        </div>
-      </aside>
-
-      <main className="ml-64 p-8">
-        <header className="mb-8 flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-corehr-600">Operations</p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">Employee management</h1>
-          </div>
-          <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">
-            Sign out
-          </button>
-        </header>
-
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/leave" element={<LeavePage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </main>
-    </div>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
+            <Route path="/leave" element={<LeavePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </AuthContext.Provider>
   );
 }
 
 function App() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const logout = () => {
+    clearTokens();
+    setUser(null);
+    navigate('/login', { replace: true });
+  };
 
   useEffect(() => {
-    const accessToken = localStorage.getItem('corehr-access-token');
+    const handleUnauthorized = () => {
+      setUser(null);
+      navigate('/login', { replace: true });
+    };
 
-    if (!accessToken) {
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!getAccessToken()) {
       setIsAuthReady(true);
       return;
     }
 
-    apiFetch<{ success: boolean; data: { id: string; name: string; email: string; role: string } | null }>('/auth/me', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+    authFetch<{ success: boolean; data: { id: string; name: string; email: string; role: string } | null }>('/auth/me')
       .then((response) => {
         const currentUser = response.data;
 
         if (currentUser) {
           setUser({
+            id: currentUser.id,
             name: currentUser.name,
             email: currentUser.email,
             role: currentUser.role as AppUser['role'],
           });
         } else {
-          localStorage.removeItem('corehr-access-token');
+          clearTokens();
         }
       })
       .catch(() => {
-        localStorage.removeItem('corehr-access-token');
+        clearTokens();
       })
       .finally(() => setIsAuthReady(true));
   }, []);
@@ -138,9 +151,9 @@ function App() {
 
     const { user: loggedInUser, accessToken, refreshToken } = response.data;
 
-    localStorage.setItem('corehr-access-token', accessToken);
-    localStorage.setItem('corehr-refresh-token', refreshToken);
+    setTokens(accessToken, refreshToken);
     setUser({
+      id: loggedInUser.id,
       name: loggedInUser.name,
       email: loggedInUser.email,
       role: loggedInUser.role,
@@ -151,10 +164,19 @@ function App() {
     return null;
   }
 
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+        <Route path="*" element={<Navigate to="/login" state={{ from: location }} replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-      <Route path="*" element={<AppShell user={user} />} />
+      <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<AppShell user={user} onLogout={logout} />} />
     </Routes>
   );
 }

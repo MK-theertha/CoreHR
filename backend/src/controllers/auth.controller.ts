@@ -39,7 +39,7 @@ export const authController = {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const userRecord = authService.getUserById(user.id);
+    const userRecord = await authService.getUserById(user.id);
 
     res.json({
       success: true,

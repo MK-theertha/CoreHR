@@ -58,6 +58,8 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   employee       Employee?
+  notifications  Notification[]
+  approvedLeaves LeaveRequest[] @relation("LeaveApprover")
 }
 
 model Department {
@@ -88,17 +90,20 @@ model Employee {
   user           User?             @relation(fields: [userId], references: [id])
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
+  leaveRequests  LeaveRequest[]
 }
 
 model LeaveRequest {
   id          String      @id @default(cuid())
   employeeId  String
+  employee    Employee    @relation(fields: [employeeId], references: [id])
   leaveType   String
   startDate   DateTime
   endDate     DateTime
   reason      String
   status      LeaveStatus @default(PENDING)
   approvedBy  String?
+  approver    User?       @relation("LeaveApprover", fields: [approvedBy], references: [id])
   comments    String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -111,6 +116,7 @@ model Notification {
   type      String
   isRead    Boolean  @default(false)
   userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 }
 
