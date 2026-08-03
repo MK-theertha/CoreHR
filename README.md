@@ -1,87 +1,159 @@
-# CoreHR - Employee Management and Compliance Platform
+# CoreHR — Employee Management Platform
 
-CoreHR is an enterprise-grade workforce management system built for organizations that need secure employee administration, document compliance, approvals, and analytics in a single platform.
+CoreHR is a full-stack workforce management system: employee directory, leave
+requests with an approval workflow, notifications, and a role-aware
+dashboard. It's a monorepo with an Express/Prisma/PostgreSQL API and a
+React/Vite/Tailwind frontend, both fully wired to a real database — no mock
+or in-memory data.
 
-## Architecture
+## Tech stack
 
-This repository is organized as a monorepo:
+| Layer    | Stack |
+|----------|-------|
+| Frontend | React 19, Vite, TypeScript, Tailwind CSS, React Router, TanStack Query, React Hook Form + Zod |
+| Backend  | Express 5, TypeScript, Prisma 7 (`@prisma/adapter-pg`), PostgreSQL, JWT auth, Zod validation |
+| Infra    | Docker Compose (Postgres + Redis + backend + frontend), GitHub Actions CI |
 
-- `frontend/`: React + Vite + TypeScript + Tailwind UI
-- `backend/`: Express + TypeScript + Prisma + PostgreSQL API
-- `docker/`: deployment assets and compose files
-- `.github/workflows/`: CI/CD pipeline
+## Repository layout
 
-## Database Schema
+```
+backend/
+  prisma/schema.prisma   # data model (source of truth)
+  prisma/seed.ts         # seeds org, roles, departments, users, sample data
+  prisma.config.ts       # Prisma 7 CLI config (schema path, seed command, datasource URL)
+  src/
+    config/              # env, Prisma client (with pg driver adapter), swagger
+    controllers/         # one per domain: auth, employee, department, leave, notification, dashboard
+    services/             # Prisma queries + business logic live here
+    routes/               # Express routers, per-route Zod validation + RBAC
+    middleware/           # protect (JWT), authorize (role check), validate (Zod), errorHandler
+frontend/
+  src/
+    pages/               # one page per route: Dashboard, Employees, Leave, Notifications, Profile, Login
+    hooks/               # TanStack Query hooks per domain (useEmployees, useLeave, useNotifications, ...) + useAuth context
+    lib/api.ts           # fetch helpers: apiFetch (public) and authFetch (adds bearer token, retries once on 401 via refresh token)
+    types/                # shared TS types mirroring the API response shapes
+```
 
-Core entities and relationships include:
+## Data model
 
-- Organization
-- Department
-- Team
-- User
-- Role
-- Permission
-- Employee
-- Document
-- LeaveRequest
-- Notification
-- AuditLog
-- RefreshToken
+Defined in `backend/prisma/schema.prisma`:
 
-The schema is designed around multi-tenant organization boundaries, auditability, and role-based access control.
+- **Organization** — top-level tenant; every Department/User/Employee belongs to one (single org is seeded today, but the schema supports more).
+- **Role** — one of `SUPER_ADMIN`, `HR_ADMIN`, `MANAGER`, `EMPLOYEE`.
+- **User** — login identity (email + bcrypt password hash + role). Optionally linked 1:1 to an `Employee`.
+- **Department** — belongs to an Organization, has many Employees.
+- **Employee** — the HR record (name, contact info, job title, department, employment status). Optionally linked to a `User` for self-service login.
+- **LeaveRequest** — belongs to an Employee, has a status (`PENDING`/`APPROVED`/`REJECTED`/`CANCELLED`) and an optional approver `User`.
+- **Notification** — belongs to a `User`; auto-created when a leave request is approved/rejected.
+- **AuditLog** — present in the schema for future use; not yet written to by the API.
 
-## API Structure
+## Auth & roles
 
-The backend exposes REST endpoints grouped by domain:
+JWT-based auth (`Authorization: Bearer <token>`), with short-lived access tokens (15m default) and longer-lived refresh tokens (7d default). The frontend's `authFetch` transparently retries once via `/auth/refresh` on a 401 before forcing logout.
 
-- `/api/v1/auth`
-- `/api/v1/users`
-- `/api/v1/organizations`
-- `/api/v1/departments`
-- `/api/v1/employees`
-- `/api/v1/documents`
-- `/api/v1/leave-requests`
-- `/api/v1/dashboard`
-- `/api/v1/notifications`
-- `/api/v1/audit-logs`
+Role permissions, enforced server-side per route:
 
-Each route is protected with middleware for authentication, validation, logging, and RBAC.
+| Role | Employees | Leave | Notifications | Profile |
+|------|-----------|-------|----------------|---------|
+| SUPER_ADMIN / HR_ADMIN | full CRUD | view all, approve/reject any | own | own (view + edit own fields) |
+| MANAGER | read-only list | view all, approve/reject others' (not own) | own | own |
+| EMPLOYEE | no access to the directory | apply, view own, cancel own pending | own | own |
 
-## Implementation Phases
+Public self-registration (`POST /auth/register`) always creates an `EMPLOYEE` — it cannot be used to grant elevated roles.
 
-1. Foundation and architecture
-2. Authentication and user roles
-3. Employee management
-4. Document compliance
-5. Leave management
-6. Dashboard and analytics
-7. Notifications and audit logs
-8. Docker and CI/CD pipeline
+## API reference
 
-## Current Status
+Base path: `/api/v1`. All routes except `/auth/register`, `/auth/login`, `/auth/refresh` require a bearer token.
 
-This repository begins with the foundation for the platform, including:
+**Auth** — `auth.routes.ts`
+- `POST /auth/register` — create an EMPLOYEE-role account
+- `POST /auth/login` — returns `{ user, accessToken, refreshToken }`
+- `POST /auth/refresh` — exchange a refresh token for a new access token
+- `GET /auth/me` — current user
 
-- project structure
-- backend configuration
-- auth and RBAC skeleton
-- employee module skeleton
-- frontend dashboard shell
+**Employees** — `employee.routes.ts`
+- `GET /employees/me` / `PATCH /employees/me` — own employee record (any authenticated user with a linked profile); self-update is limited to `phone`, `gender`, `dateOfBirth`
+- `GET /employees` — list (SUPER_ADMIN, HR_ADMIN, MANAGER)
+- `GET /employees/:id` — single record (+ EMPLOYEE)
+- `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id` — (SUPER_ADMIN, HR_ADMIN)
 
-The implementation is intentionally incremental and designed for production readiness as the platform evolves.
+**Departments** — `department.routes.ts`
+- `GET /departments` — list (any authenticated user)
+- `POST /departments` — create (SUPER_ADMIN, HR_ADMIN)
 
-## Running with Docker
+**Leave** — `leave.routes.ts`
+- `GET /leave` — all requests for admins/managers, own requests only for employees
+- `POST /leave` — apply (requires a linked employee profile)
+- `PATCH /leave/:id/approve` / `PATCH /leave/:id/reject` — (SUPER_ADMIN, HR_ADMIN, MANAGER); creates a notification for the requester
+- `PATCH /leave/:id/cancel` — owner only, pending requests only
 
-Use Docker Compose to start the full stack without clashing with any local dev ports already bound on the machine:
+**Notifications** — `notification.routes.ts`
+- `GET /notifications` — own notifications
+- `PATCH /notifications/:id/read` / `PATCH /notifications/read-all`
+
+**Dashboard** — `dashboard.routes.ts`
+- `GET /dashboard/summary` — org-wide counts + department breakdown for admins/managers; personal leave/notification counts for employees
+
+**Users** — `user.routes.ts`
+- `GET /users/roles`, `PATCH /users/role` — role listing/update stub (SUPER_ADMIN)
+
+Swagger UI is served at `/api-docs`.
+
+## Getting started (local dev)
+
+1. **Database**: `docker compose up -d postgres` (exposed on host port `5433` to avoid clashing with a local Postgres).
+2. **Backend**:
+   ```bash
+   cd backend
+   npm install
+   cp .env.example .env   # adjust CLIENT_URL/DATABASE_URL if needed
+   npx prisma migrate dev # applies migrations
+   npm run prisma:seed    # seeds roles, departments, and the accounts below
+   npm run dev            # http://localhost:4000
+   ```
+3. **Frontend**:
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env
+   npm run dev            # http://localhost:5173 (or next free port)
+   ```
+
+In development, backend CORS accepts any `http://localhost:<port>` origin (see `backend/src/app.ts`), so multiple Vite instances/ports don't require `.env` changes. In production, only the exact origins listed in `CLIENT_URL` are allowed.
+
+### Seeded test accounts
+
+| Email | Password | Role |
+|-------|----------|------|
+| admin@corehr.dev | Admin@123 | SUPER_ADMIN |
+| manager@corehr.dev | Manager@123 | MANAGER |
+| alicia.morgan@corehr.dev | Employee@123 | EMPLOYEE |
+
+### Useful scripts
+
+- `backend`: `npm run dev` / `build` / `start`, `npm run prisma:generate`, `npm run prisma:studio`, `npm run prisma:seed`
+- `frontend`: `npm run dev` / `build` / `preview`, `npm run lint`
+- root: `npm run dev:frontend`, `npm run dev:backend`, `npm run build:frontend`, `npm run build:backend` (npm workspaces)
+
+## Running with Docker Compose (full stack)
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
-
 - Frontend: http://localhost:4173
-- Backend API: http://localhost:4100
-- Health check: http://localhost:4100/health
+- Backend API: http://localhost:4100 (health check at `/health`)
+- Postgres: host port `5433`, Redis: host port `6380` (Redis is provisioned but not yet used by the API)
 
-The Compose setup exposes PostgreSQL on 5433 and Redis on 6380 on the host to avoid conflicts with existing local services.
+Note: the Compose backend service doesn't run migrations/seed automatically — run them against the container's database the same way as local dev, pointing `DATABASE_URL` at the compose Postgres instance.
+
+## CI
+
+`.github/workflows/ci.yml` installs dependencies and runs `npm run build` for both frontend and backend on every push/PR to `main`/`master`.
+
+## Known gaps / not yet implemented
+
+- No document/compliance module, audit logging is schema-only (not written to), and there's no organization/permission management UI — the schema anticipates these but the API doesn't expose them yet.
+- Redis is provisioned in Compose but unused by the app.
+- Single-organization only in practice today, even though the schema supports multiple.
