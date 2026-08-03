@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { apiFetch } from './lib/api';
 import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import LeavePage from './pages/LeavePage';
@@ -87,15 +88,72 @@ function AppShell({ user }: { user: AppUser | null }) {
 }
 
 function App() {
-  const [user, setUser] = useState<AppUser | null>({
-    name: 'Alicia Morgan',
-    email: 'alicia.morgan@corehr.dev',
-    role: 'HR_ADMIN',
-  });
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const accessToken = localStorage.getItem('corehr-access-token');
+
+    if (!accessToken) {
+      setIsAuthReady(true);
+      return;
+    }
+
+    apiFetch<{ success: boolean; data: { id: string; name: string; email: string; role: string } | null }>('/auth/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then((response) => {
+        const currentUser = response.data;
+
+        if (currentUser) {
+          setUser({
+            name: currentUser.name,
+            email: currentUser.email,
+            role: currentUser.role as AppUser['role'],
+          });
+        } else {
+          localStorage.removeItem('corehr-access-token');
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('corehr-access-token');
+      })
+      .finally(() => setIsAuthReady(true));
+  }, []);
+
+  const handleLogin = async (email: string, password: string) => {
+    const response = await apiFetch<{
+      success: boolean;
+      data: {
+        user: { id: string; name: string; email: string; role: AppUser['role'] };
+        accessToken: string;
+        refreshToken: string;
+      };
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    const { user: loggedInUser, accessToken, refreshToken } = response.data;
+
+    localStorage.setItem('corehr-access-token', accessToken);
+    localStorage.setItem('corehr-refresh-token', refreshToken);
+    setUser({
+      name: loggedInUser.name,
+      email: loggedInUser.email,
+      role: loggedInUser.role,
+    });
+  };
+
+  if (!isAuthReady) {
+    return null;
+  }
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage onLogin={() => setUser({ name: 'Alicia Morgan', email: 'alicia.morgan@corehr.dev', role: 'HR_ADMIN' })} />} />
+      <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
       <Route path="*" element={<AppShell user={user} />} />
     </Routes>
   );

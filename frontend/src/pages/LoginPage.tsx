@@ -1,16 +1,30 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 type LoginPageProps = {
-  onLogin: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
 };
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
+  const [email, setEmail] = useState('admin@corehr.dev');
+  const [password, setPassword] = useState('Admin@123');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onLogin();
-    navigate('/dashboard');
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      await onLogin(email, password);
+      navigate('/dashboard');
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -29,7 +43,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
             <input
               type="email"
-              defaultValue="admin@corehr.dev"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
             />
           </div>
@@ -38,16 +53,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
             <input
               type="password"
-              defaultValue="Admin@123"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-corehr-500 focus:bg-white"
             />
           </div>
 
+          {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+
           <button
             type="submit"
-            className="w-full rounded-xl bg-corehr-600 px-4 py-3 font-semibold text-white transition hover:bg-corehr-500"
+            disabled={isSubmitting}
+            className="w-full rounded-xl bg-corehr-600 px-4 py-3 font-semibold text-white transition hover:bg-corehr-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Sign in
+            {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
@@ -55,7 +74,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <button type="button" className="hover:text-slate-700">
             Forgot password?
           </button>
-          <button type="button" className="hover:text-slate-700">
+          <button
+            type="button"
+            className="hover:text-slate-700"
+            onClick={() => {
+              setEmail('admin@corehr.dev');
+              setPassword('Admin@123');
+            }}
+          >
             Use demo account
           </button>
         </div>
