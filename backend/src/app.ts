@@ -31,7 +31,20 @@ const isAllowedOrigin = (origin: string) => {
   return env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin);
 };
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'font-src': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        ...(env.NODE_ENV === 'production' ? {} : { 'upgrade-insecure-requests': null }),
+      },
+    },
+  }),
+);
 app.use(
   cors({
     origin: (origin, callback) => {
