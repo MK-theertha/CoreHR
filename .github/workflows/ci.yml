@@ -9,6 +9,24 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: corehr_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corehr_ci
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,11 +44,20 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace backend
 
+      - name: Lint frontend
+        run: npm run lint --workspace frontend
+
+      - name: Lint backend
+        run: npm run lint --workspace backend
+
       - name: Typecheck backend tests
         run: npm run typecheck:test --workspace backend
 
       - name: Run backend tests
         run: npm test --workspace backend
+
+      - name: Prisma migrate deploy check
+        run: npm run prisma:migrate:deploy --workspace backend
 
       - name: Build frontend
         run: npm run build --workspace frontend
