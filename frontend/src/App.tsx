@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 
 import { AppShell } from './components/layout/app-shell';
 import { AuthContext } from './hooks/useAuth';
-import { apiFetch, authFetch, clearTokens, getAccessToken, setTokens, UNAUTHORIZED_EVENT } from './lib/api';
+import { apiFetch, authFetch, clearTokens, getAccessToken, logoutRequest, setTokens, UNAUTHORIZED_EVENT } from './lib/api';
 import type { AppUser } from './types';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -25,7 +25,8 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const logout = () => {
+  const logout = async () => {
+    await logoutRequest();
     clearTokens();
     setUser(null);
     navigate('/login', { replace: true });
@@ -74,16 +75,15 @@ function App() {
       data: {
         user: { id: string; name: string; email: string; role: AppUser['role'] };
         accessToken: string;
-        refreshToken: string;
       };
     }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember }),
     });
 
-    const { user: loggedInUser, accessToken, refreshToken } = response.data;
+    const { user: loggedInUser, accessToken } = response.data;
 
-    setTokens(accessToken, refreshToken, remember);
+    setTokens(accessToken, remember);
     setUser({
       id: loggedInUser.id,
       name: loggedInUser.name,
@@ -98,16 +98,15 @@ function App() {
       data: {
         user: { id: string; name: string; email: string; role: AppUser['role'] };
         accessToken: string;
-        refreshToken: string;
       };
     }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     });
 
-    const { user: registeredUser, accessToken, refreshToken } = response.data;
+    const { user: registeredUser, accessToken } = response.data;
 
-    setTokens(accessToken, refreshToken);
+    setTokens(accessToken);
     setUser({
       id: registeredUser.id,
       name: registeredUser.name,

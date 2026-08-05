@@ -4,7 +4,7 @@ import type { AppUser } from '../types';
 
 export type AuthContextValue = {
   user: AppUser;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

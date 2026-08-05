@@ -94,9 +94,18 @@ export const authService = {
     };
   },
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken: string | undefined) {
     try {
+      if (!refreshToken) {
+        throw new AppError('Invalid refresh token', 401);
+      }
+
       const decoded = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { sub: string; type?: string };
+
+      if (decoded.type !== 'refresh') {
+        throw new AppError('Invalid refresh token', 401);
+      }
+
       const user = await prisma.user.findUnique({ where: { id: decoded.sub } });
 
       if (!user) {

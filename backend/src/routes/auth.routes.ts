@@ -17,10 +17,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.email(),
   password: z.string().min(8).max(128),
-});
-
-const refreshSchema = z.object({
-  refreshToken: z.string().min(10),
+  remember: z.boolean().optional(),
 });
 
 /**
@@ -31,7 +28,8 @@ const refreshSchema = z.object({
  */
 router.post('/register', authLimiter, validate(registerSchema), authController.register);
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
-router.post('/refresh', authLimiter, validate(refreshSchema), authController.refresh);
+router.post('/refresh', authLimiter, authController.refresh);
+router.post('/logout', authController.logout);
 router.get('/me', protect, authController.me);
 
 export default router;

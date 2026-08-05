@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -44,6 +45,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 app.use('/api/v1', apiLimiter);
 

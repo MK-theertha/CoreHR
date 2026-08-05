@@ -57,7 +57,7 @@ Every API request passes through the same pipeline, in `app.ts` then the matched
 2. **express.json()** — parses the body, 1MB cap.
 3. **morgan** — request logging — `dev` format locally, `combined` in production.
 4. **router match** — one of nine routers mounted under `/api/v1`.
-5. **protect** — verifies the `Bearer` JWT against `JWT_ACCESS_SECRET`; attaches `req.user`. Skipped only on register/login/refresh.
+5. **protect** — verifies the `Bearer` JWT against `JWT_ACCESS_SECRET`; attaches `req.user`. Skipped only on register/login/refresh/logout.
 6. **authorize(...roles)** — rejects with 403 if `req.user.role` isn't in the allowed list for that route.
 7. **validate(schema)** — Zod-parses `req.body`; 400 with issue list on failure, otherwise replaces `req.body` with the parsed value.
 8. **controller → service** — controller shapes the HTTP response; the service holds the Prisma query and the actual business rule.
@@ -69,13 +69,15 @@ Controllers wrap every handler in `asyncHandler`, so a thrown `AppError` (or any
 
 Two JWTs, signed with separate secrets: a short-lived access token and a longer-lived refresh token. Neither is stored server-side — sessions are stateless.
 
-**Login:** `POST /auth/login` → `bcrypt.compare()` → issue access token (15m) + refresh token (7d) → client stores both.
+**Login:** `POST /auth/login` → `bcrypt.compare()` → issue access token (15m) + refresh token (7d). The access token is returned in the JSON body; the refresh token is set as an `httpOnly`, `SameSite=Lax` cookie (`Secure` in production), scoped to the `/api/v1/auth` path so it's never exposed to `document.cookie` or sent to non-auth routes.
 
-**Every authenticated call:** the frontend's `authFetch` attaches `Authorization: Bearer <access token>`. On a **401**, it transparently calls `POST /auth/refresh` with the stored refresh token, retries the original request once with the new access token, and only forces a logout (dispatching a `corehr:unauthorized` event that `App.tsx` listens for) if the refresh itself fails.
+**Every authenticated call:** the frontend's `authFetch` attaches `Authorization: Bearer <access token>`. On a **401**, it transparently calls `POST /auth/refresh` (the browser sends the refresh cookie automatically — no request body needed), retries the original request once with the new access token, and only forces a logout (dispatching a `corehr:unauthorized` event that `App.tsx` listens for) if the refresh itself fails.
+
+**Logout:** `POST /auth/logout` clears the refresh cookie server-side (`res.clearCookie`); the frontend calls this before clearing its local access token. Since refresh tokens are stateless JWTs (no server-side session table), this cookie-clear is best-effort — a copy of the token exfiltrated before logout remains valid until it expires.
 
 **Registration is deliberately narrow:** `POST /auth/register` always creates an `EMPLOYEE`-role account — there is no public path to a privileged role. It also has a quiet linking behavior worth knowing: if an `Employee` row already exists with the same email (e.g. HR pre-created the HR record before the person signed up) and isn't linked to a User yet, registration links the new User to that existing Employee rather than creating a duplicate.
 
-**Token storage:** tokens live in `localStorage` if "remember me" was checked at login, otherwise `sessionStorage` — never both at once; `setTokens()` explicitly clears the other store on write.
+**Token storage:** the access token lives in `localStorage` if "remember me" was checked at login, otherwise `sessionStorage` — never both at once; `setTokens()` explicitly clears the other store on write. The refresh token is never accessible to JavaScript; "remember me" also controls whether the refresh cookie persists (`Max-Age` set) or is a session cookie (cleared when the browser closes).
 
 ## 6. Roles & permissions
 
@@ -97,14 +99,15 @@ Enforced entirely server-side, per route, via `authorize(...roles)` — the fron
 
 ## 7. API reference
 
-Base path `/api/v1`. Everything except the three auth-entry routes requires `Authorization: Bearer <token>`. Interactive docs are also served live at `/api-docs` (Swagger UI). Every response has the shape `{ success: boolean, data: T }`; validation failures return `{ success: false, message, errors }` with the Zod issue list.
+Base path `/api/v1`. Everything except the four public auth-entry routes requires `Authorization: Bearer <token>`. Interactive docs are also served live at `/api-docs` (Swagger UI). Every response has the shape `{ success: boolean, data: T }`; validation failures return `{ success: false, message, errors }` with the Zod issue list.
 
 ### Auth
 | Method | Path | Access |
 |---|---|---|
-| POST | `/auth/register` | public — always creates an EMPLOYEE |
-| POST | `/auth/login` | public — returns user + accessToken + refreshToken |
-| POST | `/auth/refresh` | public — exchanges refreshToken for a new accessToken |
+| POST | `/auth/register` | public — always creates an EMPLOYEE; sets refresh cookie |
+| POST | `/auth/login` | public — returns user + accessToken; sets refresh cookie |
+| POST | `/auth/refresh` | public — reads refresh cookie, returns a new accessToken |
+| POST | `/auth/logout` | public — clears the refresh cookie |
 | GET | `/auth/me` | any authenticated user |
 
 ### Employees
@@ -178,7 +181,7 @@ All server state goes through TanStack Query, one hook file per domain (`useEmpl
 - a `useQuery` keyed by `['domain']` or `['domain', id]`, calling `authFetch`
 - `useMutation` hooks for create/update/delete that call `queryClient.invalidateQueries` on success — usually invalidating both their own domain and `['dashboard']`, since most actions move a dashboard count
 
-`lib/api.ts` is the only place that talks to `fetch` directly: `apiFetch` for the three public auth routes, `authFetch` for everything else, with the 401 → refresh → retry-once logic described in [Auth & tokens](#5-auth--tokens) living entirely inside it. No component ever touches tokens directly.
+`lib/api.ts` is the only place that talks to `fetch` directly: `apiFetch` for the public auth routes, `authFetch` for everything else, with the 401 → refresh → retry-once logic described in [Auth & tokens](#5-auth--tokens) living entirely inside it. Both send `credentials: 'include'` so the refresh cookie is attached. No component ever touches tokens directly.
 
 ## 10. Running it
 
