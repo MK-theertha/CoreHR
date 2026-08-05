@@ -2,6 +2,7 @@ import { Suspense, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import { Skeleton } from '../ui/skeleton';
+import { TooltipProvider } from '../ui/tooltip';
 import { MobileSidebar } from './mobile-sidebar';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -35,20 +36,22 @@ export function AppShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
-      <MobileSidebar open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
+    <TooltipProvider delayDuration={200}>
+      <div className="flex min-h-screen bg-background text-foreground">
+        <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+        <MobileSidebar open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-7xl">
-            <Suspense fallback={<PageSkeleton />}>
-              <Outlet />
-            </Suspense>
-          </div>
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
+          <main className="flex-1 p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-7xl">
+              <Suspense fallback={<PageSkeleton />}>
+                <Outlet />
+              </Suspense>
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
