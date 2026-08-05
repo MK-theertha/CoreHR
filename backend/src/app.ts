@@ -7,6 +7,7 @@ import swaggerUi from 'swagger-ui-express';
 import env from './config/env';
 import { swaggerSpec } from './config/swagger';
 import { errorHandler } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimit';
 import authRoutes from './routes/auth.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import departmentRoutes from './routes/department.routes';
@@ -44,6 +45,7 @@ app.use(
 );
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
+app.use('/api/v1', apiLimiter);
 
 app.get('/health', (_req, res) => {
   res.json({

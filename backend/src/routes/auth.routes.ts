@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { authController } from '../controllers/auth.controller';
 import { protect } from '../middleware/auth';
+import { authLimiter } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -28,9 +29,9 @@ const refreshSchema = z.object({
  *   post:
  *     summary: Register a user
  */
-router.post('/register', validate(registerSchema), authController.register);
-router.post('/login', validate(loginSchema), authController.login);
-router.post('/refresh', validate(refreshSchema), authController.refresh);
+router.post('/register', authLimiter, validate(registerSchema), authController.register);
+router.post('/login', authLimiter, validate(loginSchema), authController.login);
+router.post('/refresh', authLimiter, validate(refreshSchema), authController.refresh);
 router.get('/me', protect, authController.me);
 
 export default router;
