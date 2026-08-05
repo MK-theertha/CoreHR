@@ -59,7 +59,9 @@ app.use(
 );
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
+if (env.NODE_ENV !== 'test') {
+  app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
+}
 app.use('/api/v1', apiLimiter);
 
 app.get('/health', (_req, res) => {

@@ -26,6 +26,12 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace backend
 
+      - name: Typecheck backend tests
+        run: npm run typecheck:test --workspace backend
+
+      - name: Run backend tests
+        run: npm test --workspace backend
+
       - name: Build frontend
         run: npm run build --workspace frontend
 
