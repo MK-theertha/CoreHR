@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Bell,
   LayoutDashboard,
+  ScrollText,
   Settings,
   UserCircle,
   Users,
@@ -24,6 +25,7 @@ export const navItems: NavItem[] = [
   { label: 'Leave', to: '/leave', icon: CalendarDays, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
   { label: 'Notifications', to: '/notifications', icon: Bell, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
   { label: 'Reports', to: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN'] },
+  { label: 'Audit log', to: '/audit', icon: ScrollText, roles: ['SUPER_ADMIN', 'HR_ADMIN'] },
   { label: 'Settings', to: '/settings', icon: Settings, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
   { label: 'Profile', to: '/profile', icon: UserCircle, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
 ];

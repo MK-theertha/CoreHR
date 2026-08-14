@@ -121,3 +121,21 @@ export type ApiResponse<T> = {
   success: boolean;
   data: T;
 };
+
+export type AuditLogEntry = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  timestamp: string;
+  ipAddress: string | null;
+  metadata: Record<string, unknown> | null;
+  user: { id: string; name: string; email: string } | null;
+};
+
+export type AuditLogResponse = {
+  success: boolean;
+  data: AuditLogEntry[];
+  meta: { total: number; page: number; pageSize: number };
+};

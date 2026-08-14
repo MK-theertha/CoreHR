@@ -14,6 +14,7 @@ const DepartmentDetailPage = lazy(() => import('./pages/DepartmentDetailPage'));
 const LeavePage = lazy(() => import('./pages/LeavePage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const AuditLogPage = lazy(() => import('./pages/AuditLogPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -144,6 +145,7 @@ function App() {
           <Route path="/leave" element={<LeavePage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/audit" element={<AuditLogPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
