@@ -28,7 +28,7 @@ export const employeeController = {
       throw new AppError('No employee profile linked to this account', 404);
     }
 
-    const updated = await employeeService.update(employee.id, req.body);
+    const updated = await employeeService.update(employee.id, req.body, { userId: req.user!.id, ipAddress: req.ip });
 
     res.json({ success: true, data: updated });
   }),
@@ -45,21 +45,21 @@ export const employeeController = {
   }),
 
   create: asyncHandler(async (req: Request, res: Response) => {
-    const employee = await employeeService.create(req.body);
+    const employee = await employeeService.create(req.body, { userId: req.user!.id, ipAddress: req.ip });
 
     res.status(201).json({ success: true, data: employee });
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const employee = await employeeService.update(id, req.body);
+    const employee = await employeeService.update(id, req.body, { userId: req.user!.id, ipAddress: req.ip });
 
     res.json({ success: true, data: employee });
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const employee = await employeeService.remove(id);
+    const employee = await employeeService.remove(id, { userId: req.user!.id, ipAddress: req.ip });
 
     res.json({ success: true, data: employee });
   }),

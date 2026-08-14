@@ -1,5 +1,8 @@
 import { prisma } from '../config/prisma';
 import { AppError } from '../utils/appError';
+import { auditService } from './audit.service';
+
+export type Actor = { userId: string; ipAddress?: string | null };
 
 export type EmployeeStatus = 'ACTIVE' | 'PROBATION' | 'INACTIVE' | 'TERMINATED';
 
@@ -44,7 +47,7 @@ export const employeeService = {
     return prisma.employee.findUnique({ where: { userId }, include });
   },
 
-  async create(payload: EmployeeInput) {
+  async create(payload: EmployeeInput, actor?: Actor) {
     const existing = await prisma.employee.findUnique({ where: { email: payload.email } });
 
     if (existing) {
@@ -53,7 +56,7 @@ export const employeeService = {
 
     const organization = await prisma.organization.findFirst();
 
-    return prisma.employee.create({
+    const employee = await prisma.employee.create({
       data: {
         fullName: payload.fullName,
         email: payload.email,
@@ -68,16 +71,29 @@ export const employeeService = {
       },
       include,
     });
+
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: 'EMPLOYEE_CREATED',
+        entityType: 'Employee',
+        entityId: employee.id,
+        metadata: { fullName: employee.fullName, email: employee.email },
+      });
+    }
+
+    return employee;
   },
 
-  async update(id: string, payload: Partial<EmployeeInput>) {
+  async update(id: string, payload: Partial<EmployeeInput>, actor?: Actor) {
     const existing = await prisma.employee.findUnique({ where: { id } });
 
     if (!existing) {
       throw new AppError('Employee not found', 404);
     }
 
-    return prisma.employee.update({
+    const updated = await prisma.employee.update({
       where: { id },
       data: {
         ...(payload.fullName !== undefined && { fullName: payload.fullName }),
@@ -92,15 +108,41 @@ export const employeeService = {
       },
       include,
     });
+
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: 'EMPLOYEE_UPDATED',
+        entityType: 'Employee',
+        entityId: updated.id,
+        metadata: { changes: payload },
+      });
+    }
+
+    return updated;
   },
 
-  async remove(id: string) {
+  async remove(id: string, actor?: Actor) {
     const existing = await prisma.employee.findUnique({ where: { id } });
 
     if (!existing) {
       throw new AppError('Employee not found', 404);
     }
 
-    return prisma.employee.delete({ where: { id } });
+    const removed = await prisma.employee.delete({ where: { id } });
+
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: 'EMPLOYEE_DELETED',
+        entityType: 'Employee',
+        entityId: id,
+        metadata: { fullName: existing.fullName, email: existing.email },
+      });
+    }
+
+    return removed;
   },
 };

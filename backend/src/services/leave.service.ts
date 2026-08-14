@@ -1,6 +1,9 @@
 import { prisma } from '../config/prisma';
 import { AppError } from '../utils/appError';
+import { auditService } from './audit.service';
 import { notificationService } from './notification.service';
+
+type Actor = { userId: string; ipAddress?: string | null };
 
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
@@ -36,6 +39,7 @@ export const leaveService = {
   async create(
     userId: string,
     payload: { leaveType: string; startDate: string; endDate: string; reason: string },
+    actor?: Actor,
   ) {
     const employee = await prisma.employee.findUnique({ where: { userId } });
 
@@ -50,7 +54,7 @@ export const leaveService = {
       throw new AppError('Start date must be before end date', 400);
     }
 
-    return prisma.leaveRequest.create({
+    const leaveRequest = await prisma.leaveRequest.create({
       data: {
         employeeId: employee.id,
         leaveType: payload.leaveType,
@@ -61,9 +65,22 @@ export const leaveService = {
       },
       include,
     });
+
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: 'LEAVE_REQUESTED',
+        entityType: 'LeaveRequest',
+        entityId: leaveRequest.id,
+        metadata: { leaveType: leaveRequest.leaveType, startDate: payload.startDate, endDate: payload.endDate },
+      });
+    }
+
+    return leaveRequest;
   },
 
-  async decide(id: string, approverUserId: string, status: 'APPROVED' | 'REJECTED', comments?: string) {
+  async decide(id: string, approverUserId: string, status: 'APPROVED' | 'REJECTED', comments?: string, actor?: Actor) {
     const leaveRequest = await prisma.leaveRequest.findUnique({ include, where: { id } });
 
     if (!leaveRequest) {
@@ -84,6 +101,17 @@ export const leaveService = {
       include,
     });
 
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: status === 'APPROVED' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+        entityType: 'LeaveRequest',
+        entityId: id,
+        metadata: { comments },
+      });
+    }
+
     if (leaveRequest.employee.userId) {
       await notificationService.create({
         userId: leaveRequest.employee.userId,
@@ -96,7 +124,7 @@ export const leaveService = {
     return updated;
   },
 
-  async cancel(id: string, userId: string) {
+  async cancel(id: string, userId: string, actor?: Actor) {
     const employee = await prisma.employee.findUnique({ where: { userId } });
 
     if (!employee) {
@@ -113,6 +141,18 @@ export const leaveService = {
       throw new AppError('Only pending leave requests can be cancelled', 400);
     }
 
-    return prisma.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' }, include });
+    const updated = await prisma.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' }, include });
+
+    if (actor) {
+      await auditService.record({
+        userId: actor.userId,
+        ipAddress: actor.ipAddress,
+        action: 'LEAVE_CANCELLED',
+        entityType: 'LeaveRequest',
+        entityId: id,
+      });
+    }
+
+    return updated;
   },
 };

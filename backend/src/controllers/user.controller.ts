@@ -13,7 +13,7 @@ export const userController = {
 
   updateRole: asyncHandler(async (req: Request, res: Response) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const user = await userService.updateRole(id, req.body.role);
+    const user = await userService.updateRole(id, req.body.role, { userId: req.user!.id, ipAddress: req.ip });
 
     res.json({ success: true, data: user });
   }),

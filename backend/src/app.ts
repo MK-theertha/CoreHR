@@ -9,6 +9,7 @@ import env from './config/env';
 import { swaggerSpec } from './config/swagger';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimit';
+import auditRoutes from './routes/audit.routes';
 import authRoutes from './routes/auth.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import departmentRoutes from './routes/department.routes';
@@ -80,6 +81,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/organization', organizationRoutes);
+app.use('/api/v1/audit', auditRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(errorHandler);

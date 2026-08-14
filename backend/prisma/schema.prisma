@@ -51,6 +51,7 @@ model User {
   employee       Employee?
   notifications  Notification[]
   approvedLeaves LeaveRequest[] @relation("LeaveApprover")
+  auditLogs      AuditLog[]
 }
 
 model Department {
@@ -112,10 +113,16 @@ model Notification {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  action      String
-  timestamp   DateTime @default(now())
-  ipAddress   String?
-  metadata    Json?
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String?
+  entityId   String?
+  timestamp  DateTime @default(now())
+  ipAddress  String?
+  metadata   Json?
+
+  @@index([entityType, entityId])
+  @@index([userId])
 }
