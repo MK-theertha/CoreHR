@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.db.models import Department, Employee, Organization, User
+from app.services import dashboard_service
 
 
 def _to_raw(department: Department) -> dict:
@@ -69,6 +70,7 @@ async def create_department(db: AsyncSession, *, name: str) -> dict:
     db.add(department)
     await db.commit()
     await db.refresh(department)
+    await dashboard_service.invalidate_org_summary_cache()
     return _to_raw(department)
 
 
@@ -84,6 +86,7 @@ async def update_department(db: AsyncSession, department_id: str, *, name: str |
 
     await db.commit()
     await db.refresh(department)
+    await dashboard_service.invalidate_org_summary_cache()
     return _to_raw(department)
 
 
@@ -97,4 +100,5 @@ async def delete_department(db: AsyncSession, department_id: str) -> dict:
     result = _to_raw(department)
     await db.delete(department)
     await db.commit()
+    await dashboard_service.invalidate_org_summary_cache()
     return result

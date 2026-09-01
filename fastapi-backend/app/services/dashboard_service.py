@@ -1,19 +1,76 @@
+import json
+import logging
 from datetime import datetime, timedelta, timezone
 
+from redis.exceptions import RedisError
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import get_redis
 from app.db.models import Department, Employee, LeaveRequest, Notification
 from app.deps import CurrentUser
 
 CAN_VIEW_ORG_STATS = {"SUPER_ADMIN", "HR_ADMIN", "MANAGER"}
 MONTHS_BACK = 11
 
+logger = logging.getLogger("corehr.dashboard_cache")
+
+# Org-wide summary is identical for every viewer with org-stats access, so it
+# shares one cache entry. Personal summary is per-user.
+_ORG_SUMMARY_CACHE_KEY = "dashboard:summary:org"
+_PERSONAL_SUMMARY_CACHE_KEY_PREFIX = "dashboard:summary:user:"
+_SUMMARY_CACHE_TTL_SECONDS = 60
+
+
+def _personal_summary_cache_key(user_id: str) -> str:
+    return f"{_PERSONAL_SUMMARY_CACHE_KEY_PREFIX}{user_id}"
+
+
+async def _cached_json(key: str, compute) -> dict:
+    """Cache-aside read: Redis hit short-circuits to Postgres; any Redis
+    failure (down, network blip) degrades to computing straight from
+    Postgres rather than breaking the endpoint."""
+    redis = get_redis()
+
+    try:
+        cached = await redis.get(key)
+    except RedisError:
+        logger.warning("dashboard cache read failed for %s, falling back to Postgres", key)
+        cached = None
+
+    if cached is not None:
+        return json.loads(cached)
+
+    result = await compute()
+
+    try:
+        await redis.set(key, json.dumps(result), ex=_SUMMARY_CACHE_TTL_SECONDS)
+    except RedisError:
+        logger.warning("dashboard cache write failed for %s", key)
+
+    return result
+
+
+async def invalidate_org_summary_cache() -> None:
+    try:
+        await get_redis().delete(_ORG_SUMMARY_CACHE_KEY)
+    except RedisError:
+        logger.warning("failed to invalidate org dashboard cache")
+
+
+async def invalidate_personal_summary_cache(user_id: str | None) -> None:
+    if user_id is None:
+        return
+    try:
+        await get_redis().delete(_personal_summary_cache_key(user_id))
+    except RedisError:
+        logger.warning("failed to invalidate personal dashboard cache for %s", user_id)
+
 
 async def get_summary(db: AsyncSession, user: CurrentUser) -> dict:
     if user.role in CAN_VIEW_ORG_STATS:
-        return await _org_summary(db)
-    return await _personal_summary(db, user)
+        return await _cached_json(_ORG_SUMMARY_CACHE_KEY, lambda: _org_summary(db))
+    return await _cached_json(_personal_summary_cache_key(user.id), lambda: _personal_summary(db, user))
 
 
 async def _org_summary(db: AsyncSession) -> dict:

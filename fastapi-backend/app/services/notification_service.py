@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.db.models import Notification
+from app.services import dashboard_service
 
 
 def _serialize(notification: Notification) -> dict:
@@ -37,6 +38,7 @@ async def mark_read(db: AsyncSession, notification_id: str, user_id: str) -> dic
     notification.is_read = True
     await db.commit()
     await db.refresh(notification)
+    await dashboard_service.invalidate_personal_summary_cache(user_id)
     return _serialize(notification)
 
 
@@ -45,3 +47,4 @@ async def mark_all_read(db: AsyncSession, user_id: str) -> None:
         update(Notification).where(Notification.user_id == user_id, Notification.is_read.is_(False)).values(is_read=True)
     )
     await db.commit()
+    await dashboard_service.invalidate_personal_summary_cache(user_id)

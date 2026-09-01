@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.core.errors import AppError
 from app.core.util import to_naive_utc
 from app.db.models import Employee, LeaveRequest
-from app.services import audit_service, notification_service
+from app.services import audit_service, dashboard_service, notification_service
 from app.services.audit_service import Actor
 
 CAN_MANAGE = {"SUPER_ADMIN", "HR_ADMIN", "MANAGER"}
@@ -94,6 +94,8 @@ async def create(db: AsyncSession, user_id: str, payload, actor: Actor | None) -
 
     await db.commit()
     await db.refresh(leave_request, attribute_names=["employee"])
+    await dashboard_service.invalidate_org_summary_cache()
+    await dashboard_service.invalidate_personal_summary_cache(user_id)
     return _serialize(leave_request)
 
 
@@ -149,6 +151,10 @@ async def decide(
 
     await db.commit()
     await db.refresh(leave_request, attribute_names=["employee"])
+    await dashboard_service.invalidate_org_summary_cache()
+    # Affects both the deciding-on employee's pending/approved counts and
+    # their unread-notifications count (they were just notified above).
+    await dashboard_service.invalidate_personal_summary_cache(leave_request.employee.user_id)
     return _serialize(leave_request)
 
 
@@ -184,4 +190,6 @@ async def cancel(db: AsyncSession, leave_id: str, user_id: str, actor: Actor | N
 
     await db.commit()
     await db.refresh(leave_request, attribute_names=["employee"])
+    await dashboard_service.invalidate_org_summary_cache()
+    await dashboard_service.invalidate_personal_summary_cache(user_id)
     return _serialize(leave_request)

@@ -4,7 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.deps import CurrentUser, get_current_user, get_db, require_roles
 from app.schemas.common import ok
-from app.schemas.employees import EmployeeCreateRequest, EmployeeMeUpdateRequest, EmployeeUpdateRequest
+from app.schemas.employees import (
+    EmployeeCreateRequest,
+    EmployeeMeUpdateRequest,
+    EmployeeUpdateRequest,
+    ProfileImageUploadUrlRequest,
+)
 from app.services import employees_service
 from app.services.audit_service import Actor
 
@@ -32,6 +37,27 @@ async def update_me(
 ):
     payload = body.model_dump(exclude_unset=True)
     result = await employees_service.update_me(db, user.id, payload, _actor(request, user))
+    return ok(result)
+
+
+@router.post("/me/profile-image/upload-url")
+async def create_profile_image_upload_url(
+    body: ProfileImageUploadUrlRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await employees_service.create_profile_image_upload_url(db, user.id, body.contentType)
+    return ok(result)
+
+
+@router.post("/me/profile-image/confirm")
+async def confirm_profile_image(
+    request: Request,
+    body: ProfileImageUploadUrlRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await employees_service.confirm_profile_image(db, user.id, body.contentType, _actor(request, user))
     return ok(result)
 
 

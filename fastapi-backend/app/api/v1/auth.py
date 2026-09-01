@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.core.rate_limit import auth_limit
 from app.core.security import parse_duration_seconds
 from app.deps import CurrentUser, get_current_user, get_db
 from app.schemas.auth import LoginRequest, RegisterRequest
@@ -29,23 +28,20 @@ def _set_refresh_cookie(response: Response, refresh_token: str, *, remember: boo
 
 
 @router.post("/register", status_code=201)
-@auth_limit
-async def register(request: Request, response: Response, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(response: Response, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     result = await auth_service.register(db, name=body.name, email=body.email, password=body.password)
     _set_refresh_cookie(response, result["refreshToken"], remember=True)
     return ok({"user": result["user"], "accessToken": result["accessToken"]})
 
 
 @router.post("/login")
-@auth_limit
-async def login(request: Request, response: Response, body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(response: Response, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await auth_service.login(db, email=body.email, password=body.password)
     _set_refresh_cookie(response, result["refreshToken"], remember=body.remember)
     return ok({"user": result["user"], "accessToken": result["accessToken"]})
 
 
 @router.post("/refresh")
-@auth_limit
 async def refresh(request: Request, db: AsyncSession = Depends(get_db)):
     refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not refresh_token:

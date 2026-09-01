@@ -5,12 +5,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core import s3
 from app.core.errors import AppError
 from app.core.util import to_naive_utc
 from app.db.models import Department, Employee, Organization
 from app.deps import CurrentUser
-from app.services import audit_service
+from app.services import audit_service, dashboard_service
 from app.services.audit_service import Actor
+
+# Content-type allowlist for profile image uploads, and the extension each
+# maps to for the deterministic S3 key (one image per employee — a new
+# upload overwrites the last one rather than accumulating objects).
+PROFILE_IMAGE_CONTENT_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+def _profile_image_key(employee_id: str, content_type: str) -> str:
+    return f"employees/{employee_id}/profile-image.{PROFILE_IMAGE_CONTENT_TYPES[content_type]}"
 
 
 def _serialize_department(department: Department | None) -> dict | None:
@@ -37,7 +47,9 @@ def _serialize(employee: Employee) -> dict:
         "department": _serialize_department(employee.department),
         "joiningDate": employee.joining_date,
         "status": employee.status,
-        "profileImage": employee.profile_image,
+        # The DB stores an S3 object key (bucket is private), never a raw
+        # URL — resolve it to a short-lived pre-signed GET URL on the way out.
+        "profileImage": s3.generate_presigned_get_url(employee.profile_image) if employee.profile_image else None,
         "organizationId": employee.organization_id,
         "userId": employee.user_id,
         "createdAt": employee.created_at,
@@ -129,6 +141,7 @@ async def create_employee(db: AsyncSession, payload: dict[str, Any], actor: Acto
     )
 
     await db.commit()
+    await dashboard_service.invalidate_org_summary_cache()
     return await get_employee(db, employee.id)
 
 
@@ -167,6 +180,7 @@ async def update_employee(db: AsyncSession, employee_id: str, payload: dict[str,
     )
 
     await db.commit()
+    await dashboard_service.invalidate_org_summary_cache()
     return await get_employee(db, employee_id)
 
 
@@ -181,6 +195,7 @@ async def delete_employee(db: AsyncSession, employee_id: str, actor: Actor | Non
     )
     await db.delete(employee)
     await db.commit()
+    await dashboard_service.invalidate_org_summary_cache()
 
 
 async def get_me(db: AsyncSession, user_id: str) -> dict:
@@ -195,3 +210,36 @@ async def update_me(db: AsyncSession, user_id: str, payload: dict[str, Any], act
     if employee is None:
         raise AppError("No employee profile linked to this account", 404)
     return await update_employee(db, employee["id"], payload, actor)
+
+
+async def create_profile_image_upload_url(db: AsyncSession, user_id: str, content_type: str) -> dict:
+    employee = (await db.execute(select(Employee).where(Employee.user_id == user_id))).scalar_one_or_none()
+    if employee is None:
+        raise AppError("No employee profile linked to this account", 404)
+
+    key = _profile_image_key(employee.id, content_type)
+    return {
+        "uploadUrl": s3.generate_presigned_put_url(key, content_type),
+        "contentType": content_type,
+        "expiresIn": s3.PRESIGNED_URL_TTL_SECONDS,
+    }
+
+
+async def confirm_profile_image(db: AsyncSession, user_id: str, content_type: str, actor: Actor | None) -> dict:
+    """Called after the client has successfully PUT the file straight to S3
+    using the pre-signed URL from create_profile_image_upload_url. Recomputes
+    the same deterministic key server-side rather than trusting a key/path
+    from the client."""
+    employee = (await db.execute(select(Employee).where(Employee.user_id == user_id))).scalar_one_or_none()
+    if employee is None:
+        raise AppError("No employee profile linked to this account", 404)
+
+    employee.profile_image = _profile_image_key(employee.id, content_type)
+
+    audit_service.record(
+        db, actor, action="EMPLOYEE_UPDATED", entity_type="Employee", entity_id=employee.id,
+        metadata={"changes": {"profileImage": True}},
+    )
+
+    await db.commit()
+    return await get_employee(db, employee.id)

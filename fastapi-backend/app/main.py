@@ -2,19 +2,21 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import router as v1_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
-from app.core.rate_limit import limiter
+from app.core.rate_limit import RateLimitMiddleware
 
 app = FastAPI(title="CoreHR API", version="1.0.0", docs_url="/api-docs")
 
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 register_exception_handlers(app)
+
+# Added before CORSMiddleware so CORS ends up outermost (Starlette runs the
+# most-recently-added middleware first) — otherwise a 429 response never
+# picks up CORS headers and browsers report a confusing CORS failure instead
+# of the actual rate-limit error.
+app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

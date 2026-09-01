@@ -5,6 +5,10 @@ services:
       POSTGRES_DB: corehr
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      # The Node/Prisma backend owns `corehr`; the FastAPI/Alembic backend
+      # gets its own `corehr_fastapi` so the two migration tools never touch
+      # the same schema. See scripts/postgres-init-multiple-dbs.sh.
+      POSTGRES_MULTIPLE_DATABASES: corehr_fastapi
     ports:
       - '5433:5432'
     healthcheck:
@@ -14,11 +18,44 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
 
   redis:
     image: redis:7-alpine
     ports:
       - '6380:6379'
+
+  fastapi-backend:
+    build:
+      context: ./fastapi-backend
+    ports:
+      - '8100:8000'
+    environment:
+      APP_ENV: development
+      PORT: 8000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/corehr_fastapi
+      REDIS_URL: redis://redis:6379/0
+      JWT_ACCESS_SECRET: change-me-access-secret
+      JWT_REFRESH_SECRET: change-me-refresh-secret
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+      CLIENT_URL: http://localhost:4173
+      AWS_REGION: ap-south-1
+      # Left empty: profile-image/document upload endpoints return 501
+      # locally rather than erroring against a bucket that doesn't exist.
+      S3_UPLOADS_BUCKET: ''
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # Same command the production image runs, just with `alembic upgrade
+    # head` first — matches "production deployment should use alembic
+    # upgrade head", never a dev-only migration command, in every environment.
+    command: >
+      sh -c "alembic upgrade head &&
+             gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000"
+    restart: unless-stopped
 
   backend:
     build:

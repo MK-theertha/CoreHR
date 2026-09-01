@@ -34,3 +34,10 @@ class EmployeeMeUpdateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=30)
     gender: str | None = Field(default=None, max_length=30)
     dateOfBirth: datetime | None = None
+
+
+ProfileImageContentType = Literal["image/jpeg", "image/png", "image/webp"]
+
+
+class ProfileImageUploadUrlRequest(BaseModel):
+    contentType: ProfileImageContentType
