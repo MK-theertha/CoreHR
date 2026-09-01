@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.errors import AppError
+from app.core.util import to_naive_utc
 from app.db.models import Employee, LeaveRequest
 from app.services import audit_service, notification_service
 from app.services.audit_service import Actor
@@ -70,8 +71,8 @@ async def create(db: AsyncSession, user_id: str, payload, actor: Actor | None) -
     leave_request = LeaveRequest(
         employee_id=own_employee.id,
         leave_type=payload.leaveType,
-        start_date=payload.startDate,
-        end_date=payload.endDate,
+        start_date=to_naive_utc(payload.startDate),
+        end_date=to_naive_utc(payload.endDate),
         reason=payload.reason,
         status="PENDING",
     )

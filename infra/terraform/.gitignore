@@ -1,0 +1,13 @@
+.terraform/
+# .terraform.lock.hcl is intentionally NOT ignored — commit it so every
+# apply uses the exact same provider versions (reproducibility).
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!terraform.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

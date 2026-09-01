@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored —
+# never commit real values.
+
+aws_region = "ap-south-1"
+
+# Set once you have a GitHub repo to trust for OIDC deploys, e.g. "MK-theertha/CoreHR".
+# Leave empty and no OIDC provider/role is created at all.
+github_repository = ""
+
+# Leave both empty to run HTTP-only on the ALB's own DNS name and CloudFront's
+# default *.cloudfront.net domain — everything still works, just without a
+# custom domain or ALB-side HTTPS.
+domain_name     = ""
+route53_zone_id = ""
+
+# Once the CloudFront/ALB URLs are known (from `terraform output` after a
+# first apply), set this so CORS and the uploads-bucket CORS rule allow the
+# real frontend origin instead of falling back to "*".
+client_url = ""
+
+# Get emailed when a CloudWatch alarm fires.
+alarm_email = ""

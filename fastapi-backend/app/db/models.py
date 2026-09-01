@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +25,7 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column("updatedAt", DateTime, default=_utcnow, onupdate=_utcnow)
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
@@ -42,9 +42,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column("passwordHash", String, nullable=False)
     role: Mapped[str] = mapped_column(RoleNameEnum, nullable=False, server_default="EMPLOYEE")
     organization_id: Mapped[str | None] = mapped_column(
-        "organizationId", String, ForeignKey("Organization.id", ondelete="SET NULL"), nullable=True
+        "organizationId",
+        String,
+        ForeignKey("Organization.id", ondelete="SET NULL", name="User_organizationId_fkey"),
+        nullable=True,
     )
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column("updatedAt", DateTime, default=_utcnow, onupdate=_utcnow)
 
     organization: Mapped["Organization | None"] = relationship(back_populates="users")
@@ -60,9 +63,12 @@ class Department(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
     organization_id: Mapped[str] = mapped_column(
-        "organizationId", String, ForeignKey("Organization.id", ondelete="RESTRICT"), nullable=False
+        "organizationId",
+        String,
+        ForeignKey("Organization.id", ondelete="RESTRICT", name="Department_organizationId_fkey"),
+        nullable=False,
     )
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
 
     organization: Mapped["Organization"] = relationship(back_populates="departments")
     employees: Mapped[list["Employee"]] = relationship(back_populates="department")
@@ -79,18 +85,28 @@ class Employee(Base):
     gender: Mapped[str | None] = mapped_column(String, nullable=True)
     job_title: Mapped[str | None] = mapped_column("jobTitle", String, nullable=True)
     department_id: Mapped[str | None] = mapped_column(
-        "departmentId", String, ForeignKey("Department.id", ondelete="SET NULL"), nullable=True
+        "departmentId",
+        String,
+        ForeignKey("Department.id", ondelete="SET NULL", name="Employee_departmentId_fkey"),
+        nullable=True,
     )
     joining_date: Mapped[datetime | None] = mapped_column("joiningDate", DateTime, nullable=True)
     status: Mapped[str] = mapped_column(EmploymentStatusEnum, nullable=False, server_default="ACTIVE")
     profile_image: Mapped[str | None] = mapped_column("profileImage", String, nullable=True)
     organization_id: Mapped[str | None] = mapped_column(
-        "organizationId", String, ForeignKey("Organization.id", ondelete="SET NULL"), nullable=True
+        "organizationId",
+        String,
+        ForeignKey("Organization.id", ondelete="SET NULL", name="Employee_organizationId_fkey"),
+        nullable=True,
     )
     user_id: Mapped[str | None] = mapped_column(
-        "userId", String, ForeignKey("User.id", ondelete="SET NULL"), nullable=True, unique=True
+        "userId",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="Employee_userId_fkey"),
+        nullable=True,
+        unique=True,
     )
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column("updatedAt", DateTime, default=_utcnow, onupdate=_utcnow)
 
     organization: Mapped["Organization | None"] = relationship(back_populates="employees")
@@ -104,7 +120,10 @@ class LeaveRequest(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
     employee_id: Mapped[str] = mapped_column(
-        "employeeId", String, ForeignKey("Employee.id", ondelete="RESTRICT"), nullable=False
+        "employeeId",
+        String,
+        ForeignKey("Employee.id", ondelete="RESTRICT", name="LeaveRequest_employeeId_fkey"),
+        nullable=False,
     )
     leave_type: Mapped[str] = mapped_column("leaveType", String, nullable=False)
     start_date: Mapped[datetime] = mapped_column("startDate", DateTime, nullable=False)
@@ -112,10 +131,13 @@ class LeaveRequest(Base):
     reason: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(LeaveStatusEnum, nullable=False, server_default="PENDING")
     approved_by: Mapped[str | None] = mapped_column(
-        "approvedBy", String, ForeignKey("User.id", ondelete="SET NULL"), nullable=True
+        "approvedBy",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="LeaveRequest_approvedBy_fkey"),
+        nullable=True,
     )
     comments: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column("updatedAt", DateTime, default=_utcnow, onupdate=_utcnow)
 
     employee: Mapped["Employee"] = relationship(back_populates="leave_requests")
@@ -131,9 +153,12 @@ class Notification(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)
     is_read: Mapped[bool] = mapped_column("isRead", Boolean, nullable=False, server_default="false")
     user_id: Mapped[str | None] = mapped_column(
-        "userId", String, ForeignKey("User.id", ondelete="SET NULL"), nullable=True
+        "userId",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="Notification_userId_fkey"),
+        nullable=True,
     )
-    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
 
     user: Mapped["User | None"] = relationship(back_populates="notifications")
 
@@ -147,12 +172,15 @@ class AuditLog(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
     user_id: Mapped[str | None] = mapped_column(
-        "userId", String, ForeignKey("User.id", ondelete="SET NULL"), nullable=True
+        "userId",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="AuditLog_userId_fkey"),
+        nullable=True,
     )
     action: Mapped[str] = mapped_column(String, nullable=False)
     entity_type: Mapped[str | None] = mapped_column("entityType", String, nullable=True)
     entity_id: Mapped[str | None] = mapped_column("entityId", String, nullable=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     ip_address: Mapped[str | None] = mapped_column("ipAddress", String, nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
