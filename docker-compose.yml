@@ -82,11 +82,15 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: http://localhost:4100/api/v1
+        # Cut over to the FastAPI backend — this is now the live API the
+        # frontend talks to. `backend` (Node) is still defined above and can
+        # still be run standalone (e.g. `docker compose up backend`), but
+        # nothing depends on it anymore.
+        VITE_API_BASE_URL: http://localhost:8100/api/v1
     ports:
       - '4173:80'
     depends_on:
-      - backend
+      - fastapi-backend
     restart: unless-stopped
 
 volumes:

@@ -15,6 +15,7 @@ COPY --from=builder /root/.local /home/app/.local
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
+COPY scripts ./scripts
 
 RUN chown -R app:app /app
 USER app

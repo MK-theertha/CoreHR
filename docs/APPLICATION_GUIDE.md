@@ -5,19 +5,28 @@ every technology in it, how the repository is laid out, the full data model, eve
 API endpoint, and how local dev / CI / production deployment work. It assumes no
 prior familiarity with the codebase.
 
-> **Read this first — the app currently has two backends.** CoreHR started as a
-> Node/Express/Prisma API and is being migrated to Python/FastAPI/SQLAlchemy. Both
-> exist in the repo right now:
-> - **`backend/`** — the original Node/Express/Prisma API. **This is what the
->   frontend actually talks to today** (`frontend`'s `VITE_API_BASE_URL` points at
->   it, and `docker-compose.yml`'s `frontend` service depends on it).
-> - **`fastapi-backend/`** — the new Python/FastAPI/SQLAlchemy API. It reimplements
->   the same data model and (almost) the same API contract, has its own database,
->   runs in Docker Compose alongside the Node backend, has its own CI job, and has
->   a full Terraform module for deploying it to AWS. **The frontend does not call
->   it yet** — no cutover has happened. It's reachable directly (e.g.
->   `http://localhost:8100` locally) for testing, but nothing wires it into the
->   user-facing app yet.
+> **Read this first — the app has cut over to the FastAPI backend.** CoreHR
+> started as a Node/Express/Prisma API and has been migrated to
+> Python/FastAPI/SQLAlchemy. Both backends still exist in the repo:
+> - **`fastapi-backend/`** — the Python/FastAPI/SQLAlchemy API. **This is what the
+>   frontend actually talks to now** (`frontend`'s `VITE_API_BASE_URL` points at
+>   it, both locally and in `docker-compose.yml`, where the `frontend` service
+>   depends on `fastapi-backend`, not `backend`). Verified end-to-end in a real
+>   browser (Playwright) against the Docker Compose stack: login, every main page,
+>   and a full leave-request → approval → notification write path, all against
+>   real seeded data, zero console errors.
+> - **`backend/`** — the original Node/Express/Prisma API. Kept in the repo and
+>   still runnable standalone (`docker compose up backend`) as a rollback path,
+>   but nothing depends on it anymore and it receives no further changes.
+>
+> The cutover surfaced one real gap that's now fixed: `fastapi-backend` had no
+> seed script, so a fresh database had no `Organization` row at all — and
+> `POST /departments` hard-requires one, meaning a brand-new deployment could
+> register a bare `EMPLOYEE` account and nothing else. `fastapi-backend/scripts/seed.py`
+> now mirrors `backend/prisma/seed.ts`: same org, same two departments, same three
+> login accounts (`admin@corehr.dev` / `Admin@123` and friends — see
+> [§14](#14-local-development)) — so the same credentials work against either
+> backend.
 >
 > Everything in this guide is written against the **current, real state of the
 > code** (not the original design intent) — see [§13 Current State & Known
@@ -104,13 +113,14 @@ CoreHR/
 │   │   └── services/             #   business logic + DB queries, one file per domain
 │   ├── alembic/                 #   migrations (env.py wired to app.core.config.settings)
 │   │   └── versions/1117969025a6_initial_schema.py   # the one baseline migration
+│   ├── scripts/seed.py           #   idempotent dev-data seed, mirrors backend/prisma/seed.ts
 │   ├── tests/                    #   pytest + pytest-asyncio, hits a real Postgres
 │   ├── Dockerfile                #   multi-stage, non-root, gunicorn+uvicorn workers
 │   ├── requirements.txt
 │   ├── alembic.ini
 │   └── pytest.ini
 │
-├── frontend/                    # React 19 + Vite SPA — talks to backend/ (Node), not fastapi-backend/
+├── frontend/                    # React 19 + Vite SPA — now talks to fastapi-backend/ (cut over)
 │   └── src/
 │       ├── pages/, hooks/, lib/api.ts, types/, components/   # see §11
 │
@@ -642,9 +652,12 @@ there for whoever picks this up.
 
 ## 11. Frontend architecture
 
-> The frontend was not modified this migration cycle and currently talks
-> exclusively to the **Node** backend (`backend/`), not `fastapi-backend/` — see
-> `VITE_API_BASE_URL` below.
+> The frontend's own code wasn't touched to make this cutover happen — only its
+> API target (`VITE_API_BASE_URL`, see §11.4) — and it now talks to
+> **`fastapi-backend/`**, not the Node `backend/`. Nothing below changed as a
+> result; it's documented here exactly as it was written against the Node API,
+> because the frontend genuinely didn't need to change — that's the point of
+> keeping the two backends' contracts identical.
 
 ### 11.1 Directory structure
 
@@ -654,7 +667,7 @@ frontend/
 ├── index.html, vite.config.ts
 ├── tailwind.config.js, postcss.config.js
 ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
-├── .env.example                   # VITE_API_BASE_URL=http://localhost:4000/api/v1 (only env var used)
+├── .env.example                   # VITE_API_BASE_URL=http://localhost:8100/api/v1 (only env var used)
 ├── .oxlintrc.json                 # oxlint (Rust-based linter) config — used instead of ESLint
 └── src/
     ├── App.tsx                    # router + auth bootstrap (the router "lives" here, no separate router file)
@@ -748,6 +761,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000
 const ACCESS_TOKEN_KEY = 'corehr-access-token';
 export const UNAUTHORIZED_EVENT = 'corehr:unauthorized';
 ```
+
+That in-code fallback (`4000`, the Node backend's local dev port) is untouched —
+it's just the last resort if `VITE_API_BASE_URL` is unset. It isn't unset in
+practice: `frontend/.env`, `frontend/.env.example`, and `frontend/Dockerfile`'s
+build-time default all now point at `http://localhost:8100/api/v1` —
+`fastapi-backend`'s port, both for local Vite dev and Docker Compose.
 
 - **Token storage**: only the **access** token is kept in the browser
   (`localStorage` if "remember me" was checked, `sessionStorage` otherwise,
@@ -927,13 +946,15 @@ must be (and is) handled entirely by the backend.
 
 ---
 
-## 12. Node/Express backend (legacy, still live)
+## 12. Node/Express backend (legacy, rollback path)
 
-The original backend, still what's actually served in production/dev today. Not
-re-documented in full detail here since `docs/ARCHITECTURE.md` already covers it
-and it wasn't touched this migration cycle — see that file for its controllers/
-services/routes/middleware layout, and the root `README.md` for its API reference
-and seeded test accounts. Highlights relevant to understanding the migration:
+The original backend. As of the cutover ([§13](#13-current-state--known-gaps)),
+nothing in the running app depends on it anymore, but it's kept fully functional
+in the repo and in `docker-compose.yml` as a rollback option. Not re-documented in
+full detail here since `docs/ARCHITECTURE.md` already covers it and it wasn't
+touched this migration cycle — see that file for its controllers/services/routes/
+middleware layout, and the root `README.md` for its API reference and seeded test
+accounts. Highlights relevant to understanding the migration:
 
 - Prisma schema is genuinely the schema of record — the FastAPI SQLAlchemy models
   were derived from it, not the other way around.
@@ -961,10 +982,18 @@ document:
 - Full Terraform module for AWS (written and `terraform validate`-clean; **never
   applied** — no AWS resources have actually been created from it).
 - 104 passing pytest tests (auth dependency, RBAC matrix, role-guard behavior).
+- **The frontend cutover.** `VITE_API_BASE_URL` now points at `fastapi-backend`
+  everywhere (local `.env`, Docker Compose, the Dockerfile's build-time default);
+  `docker-compose.yml`'s `frontend` service depends on `fastapi-backend`, not
+  `backend`. Verified with a real headless-browser pass (Playwright) against the
+  Docker Compose stack: login as each seeded role, every main page renders real
+  data with zero console errors, and a full write path (submit a leave request as
+  `alicia.morgan@corehr.dev`, approve it as `admin@corehr.dev`, confirm the
+  notification lands) works end-to-end. `fastapi-backend/scripts/seed.py` (new)
+  provides the same three login accounts as the Node backend's Prisma seed, so
+  nothing about "how do I log in" changed for anyone using this app.
 
 **Not implemented / explicitly deferred**
-- **Frontend still talks to the Node backend.** No cutover has happened; nothing
-  in the frontend has been changed.
 - **Employee documents / leave-request attachments** — S3 plumbing exists but
   isn't wired to a data model (no `Document` table).
 - **Terraform has never been applied** — writing IaC and provisioning real AWS
@@ -1004,6 +1033,7 @@ python3.13 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # adjust DATABASE_URL if your local Postgres differs
 alembic upgrade head        # creates the schema
+python -m scripts.seed      # creates the org, 2 departments, 3 login accounts (idempotent)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -1012,17 +1042,36 @@ rate limiting), a reachable Redis (`REDIS_URL`) — the app still runs and its t
 still pass without Redis (everything fails open), just without those two features
 actually working.
 
-### Node backend + frontend
+**Seeded accounts** (`fastapi-backend/scripts/seed.py`, mirrors the Node
+backend's Prisma seed — same credentials work against either):
 
-See the root `README.md` — `npm install` at the root, `npx prisma migrate dev` +
-`npm run prisma:seed` in `backend/`, `npm run dev` in both `backend/` and
-`frontend/`. Seeded test accounts are listed there.
+| Email | Password | Role |
+|---|---|---|
+| `admin@corehr.dev` | `Admin@123` | SUPER_ADMIN |
+| `manager@corehr.dev` | `Manager@123` | MANAGER |
+| `alicia.morgan@corehr.dev` | `Employee@123` | EMPLOYEE |
+
+Run the seed script once per database — it's idempotent (safe to re-run; it
+upserts by email/slug rather than inserting duplicates).
+
+### Node backend (rollback path only)
+
+Still in the repo and fully functional standalone, but nothing depends on it
+anymore. See the root `README.md` for its own setup — `npm install` at the root,
+`npx prisma migrate dev` + `npm run prisma:seed` in `backend/`, `npm run dev`.
+
+### Frontend
+
+`cd frontend && npm install && npm run dev` — reads `VITE_API_BASE_URL` from
+`.env` (defaults to `fastapi-backend` at `http://localhost:8100/api/v1`). Use the
+same seeded accounts above to log in.
 
 ### Running everything together
 
 See [§15](#15-docker--docker-compose) — `docker compose up --build` is the
-one-command way to get Postgres, Redis, the Node backend, the FastAPI backend, and
-the frontend all running.
+one-command way to get Postgres, Redis, the FastAPI backend (what the frontend
+actually uses), the frontend, and the Node backend (available but idle) all
+running.
 
 ---
 
@@ -1034,9 +1083,9 @@ the frontend all running.
 |---|---|---|---|
 | `postgres` | `postgres:16-alpine` | `5433 → 5432` | Creates `corehr` (Node) on first boot, plus `corehr_fastapi` via `scripts/postgres-init-multiple-dbs.sh` mounted into `/docker-entrypoint-initdb.d/`. |
 | `redis` | `redis:7-alpine` | `6380 → 6379` | Shared by both backends (different key namespaces, no config needed). |
-| `backend` | `./backend` | `4100 → 4000` | Node/Express. |
-| `fastapi-backend` | `./fastapi-backend` | `8100 → 8000` | Runs `alembic upgrade head && gunicorn ...` as its `command` — migrations always run before the server starts, same production command with a migration step prepended. |
-| `frontend` | `./frontend` | `4173 → 80` | Built with `VITE_API_BASE_URL=http://localhost:4100/api/v1` baked in at build time — points at the **Node** backend. Depends only on `backend`, not `fastapi-backend`. |
+| `backend` | `./backend` | `4100 → 4000` | Node/Express — still runnable, nothing depends on it anymore. |
+| `fastapi-backend` | `./fastapi-backend` | `8100 → 8000` | Runs `alembic upgrade head && gunicorn ...` as its `command` — migrations always run before the server starts, same production command with a migration step prepended. Also ships `scripts/seed.py` (`docker compose exec fastapi-backend python -m scripts.seed`). |
+| `frontend` | `./frontend` | `4173 → 80` | Built with `VITE_API_BASE_URL=http://localhost:8100/api/v1` baked in at build time — points at **FastAPI**. `depends_on: fastapi-backend`. |
 
 **Important caveat about `POSTGRES_MULTIPLE_DATABASES`**: the init script only
 runs when Postgres's data volume is first created. If you already had a
@@ -1212,10 +1261,15 @@ See [§18](#18-terraform--aws-production-infrastructure) and
 `infra/terraform/terraform.tfvars.example` — every variable has a workable
 default except `aws_region` (recommended to set explicitly).
 
-### Node backend / frontend
+### `frontend/.env`
 
-See the root `README.md` for `backend/.env` and `frontend/.env` — not changed
-this migration cycle.
+| Variable | Default | Notes |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8100/api/v1` | Points at `fastapi-backend` (changed from `:4100`, the Node backend, as part of the cutover). Baked in at build time — see §11.11. |
+
+### `backend/.env` (Node, rollback path only)
+
+See the root `README.md` — unchanged.
 
 ---
 
