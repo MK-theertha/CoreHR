@@ -13,6 +13,23 @@ from app.services.audit_service import Actor
 CAN_MANAGE = {"SUPER_ADMIN", "HR_ADMIN", "MANAGER"}
 
 
+async def get_visible_leave_request(db: AsyncSession, leave_id: str, user) -> LeaveRequest:
+    """404s (not 403) for a leave request that exists but isn't the caller's
+    own and the caller can't manage — avoids confirming to an EMPLOYEE that a
+    given ID belongs to someone else. Used to gate access to a leave
+    request's attached documents."""
+    leave_request = (
+        await db.execute(
+            select(LeaveRequest).options(selectinload(LeaveRequest.employee)).where(LeaveRequest.id == leave_id)
+        )
+    ).scalar_one_or_none()
+    if leave_request is None:
+        raise AppError("Leave request not found", 404)
+    if user.role not in CAN_MANAGE and leave_request.employee.user_id != user.id:
+        raise AppError("Leave request not found", 404)
+    return leave_request
+
+
 def _serialize_employee(employee: Employee) -> dict:
     return {
         "id": employee.id,

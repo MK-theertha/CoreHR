@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -185,3 +185,34 @@ class AuditLog(Base):
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
 
     user: Mapped["User | None"] = relationship(back_populates="audit_logs")
+
+
+class Document(Base):
+    """A file attached to an Employee or a LeaveRequest (profile images are
+    separate — see Employee.profile_image — this is for the "employee
+    documents" / "leave documents" case: zero-or-more files per entity).
+
+    Polymorphic association via (entity_type, entity_id), same pattern as
+    AuditLog, rather than two near-identical tables or a nullable FK per
+    entity type.
+    """
+
+    __tablename__ = "Document"
+    __table_args__ = (Index("Document_entityType_entityId_idx", "entityType", "entityId"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
+    entity_type: Mapped[str] = mapped_column("entityType", String, nullable=False)
+    entity_id: Mapped[str] = mapped_column("entityId", String, nullable=False)
+    file_name: Mapped[str] = mapped_column("fileName", String, nullable=False)
+    content_type: Mapped[str] = mapped_column("contentType", String, nullable=False)
+    size_bytes: Mapped[int | None] = mapped_column("sizeBytes", BigInteger, nullable=True)
+    s3_key: Mapped[str] = mapped_column("s3Key", String, nullable=False)
+    uploaded_by: Mapped[str | None] = mapped_column(
+        "uploadedBy",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="Document_uploadedBy_fkey"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
+
+    uploader: Mapped["User | None"] = relationship()

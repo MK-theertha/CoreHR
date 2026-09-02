@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 
 from app.core.config import settings
 from app.core.errors import AppError
@@ -40,3 +41,24 @@ def generate_presigned_get_url(key: str) -> str | None:
         Params={"Bucket": settings.s3_uploads_bucket, "Key": key},
         ExpiresIn=PRESIGNED_URL_TTL_SECONDS,
     )
+
+
+def object_exists(key: str) -> bool:
+    """Used to confirm a client's direct-to-S3 upload actually landed before
+    a Document row referencing it is persisted — never trust the client's
+    say-so alone."""
+    if not settings.s3_uploads_bucket:
+        return False
+    try:
+        get_s3_client().head_object(Bucket=settings.s3_uploads_bucket, Key=key)
+        return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return False
+        raise
+
+
+def delete_object(key: str) -> None:
+    if not settings.s3_uploads_bucket:
+        return
+    get_s3_client().delete_object(Bucket=settings.s3_uploads_bucket, Key=key)

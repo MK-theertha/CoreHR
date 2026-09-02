@@ -24,6 +24,30 @@ PROTECT_ONLY_ROUTES = [
     ("GET", "/api/v1/notifications", None),
     ("PATCH", "/api/v1/notifications/read-all", None),
     ("PATCH", "/api/v1/notifications/does-not-exist/read", None),
+    ("GET", "/api/v1/employees/me/documents", None),
+    (
+        "POST",
+        "/api/v1/employees/me/documents/upload-url",
+        {"fileName": "id.pdf", "contentType": "application/pdf"},
+    ),
+    (
+        "POST",
+        "/api/v1/employees/me/documents/confirm",
+        {"documentId": "does-not-exist", "fileName": "id.pdf", "contentType": "application/pdf"},
+    ),
+    ("DELETE", "/api/v1/employees/me/documents/does-not-exist", None),
+    ("GET", "/api/v1/leave/does-not-exist/documents", None),
+    (
+        "POST",
+        "/api/v1/leave/does-not-exist/documents/upload-url",
+        {"fileName": "note.pdf", "contentType": "application/pdf"},
+    ),
+    (
+        "POST",
+        "/api/v1/leave/does-not-exist/documents/confirm",
+        {"documentId": "does-not-exist", "fileName": "note.pdf", "contentType": "application/pdf"},
+    ),
+    ("DELETE", "/api/v1/leave/does-not-exist/documents/does-not-exist", None),
 ]
 
 # (method, path, body, allowed_roles) for routes guarded by `authorize(...roles)`.
@@ -50,6 +74,25 @@ ROLE_RESTRICTED_ROUTES = [
     ("GET", "/api/v1/reports/summary", None, ["SUPER_ADMIN"]),
     ("GET", "/api/v1/users/roles", None, ["SUPER_ADMIN"]),
     ("PATCH", "/api/v1/users/does-not-exist/role", {"role": "EMPLOYEE"}, ["SUPER_ADMIN"]),
+    (
+        "POST",
+        "/api/v1/employees/does-not-exist/documents/upload-url",
+        {"fileName": "id.pdf", "contentType": "application/pdf"},
+        ["SUPER_ADMIN", "HR_ADMIN"],
+    ),
+    (
+        "POST",
+        "/api/v1/employees/does-not-exist/documents/confirm",
+        {"documentId": "does-not-exist", "fileName": "id.pdf", "contentType": "application/pdf"},
+        ["SUPER_ADMIN", "HR_ADMIN"],
+    ),
+    ("GET", "/api/v1/employees/does-not-exist/documents", None, ["SUPER_ADMIN", "HR_ADMIN", "MANAGER"]),
+    (
+        "DELETE",
+        "/api/v1/employees/does-not-exist/documents/does-not-exist",
+        None,
+        ["SUPER_ADMIN", "HR_ADMIN"],
+    ),
 ]
 
 
