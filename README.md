@@ -32,7 +32,7 @@ fastapi-backend/   # live API — app/api (routers) → app/services (business l
   app/services/     # business logic per domain (employees, leave, notifications, reports, audit, ...)
   app/api/v1/       # thin routers — parse request, call one service function, wrap the response
   alembic/          # database migrations
-  tests/            # pytest suite (185 tests)
+  tests/            # pytest suite (190 tests)
 backend/            # legacy Node/Express/Prisma API — rollback path only, see docs/guide/10-legacy-node-backend.md
 frontend/           # React app, talks to fastapi-backend via VITE_API_BASE_URL
 infra/terraform/    # AWS infrastructure as code (VPC, ALB, ASG, RDS, ElastiCache, S3, CloudFront, IAM)
@@ -82,11 +82,12 @@ source .venv/bin/activate
 pytest -q
 ```
 
-185 tests: RBAC permission matrix, auth (incl. refresh-token revocation), leave
+190 tests: RBAC permission matrix, auth (incl. refresh-token revocation), leave
 workflow, notifications, reports/dashboard (incl. CSV export), audit logging,
-per-employee activity, notes, department open positions, and document upload
-against a mocked S3. See [Testing](docs/guide/14-testing.md) for
-details and caveats (tests run against a real Postgres + Redis, not mocks).
+per-employee activity, notes CRUD + edit, department open positions, employee
+role serialization, and document upload against a mocked S3. See
+[Testing](docs/guide/14-testing.md) for details and caveats (tests run against
+a real Postgres + Redis, not mocks).
 
 ## CI
 

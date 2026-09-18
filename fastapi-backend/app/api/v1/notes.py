@@ -34,6 +34,20 @@ async def create_note(
     return ok(await notes_service.create(db, employee_id=employee_id, body=body.body, actor=_actor(request, user)))
 
 
+@router.patch("/{note_id}")
+async def update_note(
+    employee_id: str,
+    note_id: str,
+    request: Request,
+    body: NoteCreateRequest,
+    user: CurrentUser = Depends(require_roles(*STAFF_ROLES)),
+    db: AsyncSession = Depends(get_db),
+):
+    return ok(
+        await notes_service.update(db, employee_id=employee_id, note_id=note_id, body=body.body, actor=_actor(request, user))
+    )
+
+
 @router.delete("/{note_id}")
 async def delete_note(
     employee_id: str,

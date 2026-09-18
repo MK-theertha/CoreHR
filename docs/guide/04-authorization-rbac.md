@@ -57,7 +57,14 @@ matrix above captures:
 | Endpoint | SUPER_ADMIN | HR_ADMIN | MANAGER | EMPLOYEE |
 |---|:---:|:---:|:---:|:---:|
 | `GET /employees/{id}/activity` | ✅ (any) | ✅ (any) | ✅ (any) | ✅ (own record only — 404 for anyone else's) |
-| `GET/POST/DELETE /employees/{id}/notes...` | ✅ | ✅ | ✅ | ❌ (even for their own record) |
+| `GET/POST/PATCH/DELETE /employees/{id}/notes...` | ✅ | ✅ | ✅ | ❌ (even for their own record) |
+
+**Department manager assignment** is a frontend-only concept layered on top of
+the existing role system, not a separate permission — the "Assign manager"
+dialog (Department Detail page, SUPER_ADMIN only in the UI) works by calling
+`PATCH /users/{id}/role` twice (demote the old manager, promote the new one),
+so it's gated by that endpoint's existing `SUPER_ADMIN`-only RBAC, not a new
+rule. See [API Reference](./06-api-reference.md).
 
 ---
 

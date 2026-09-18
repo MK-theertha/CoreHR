@@ -49,6 +49,31 @@ async def create(db: AsyncSession, *, employee_id: str, body: str, actor: Actor 
     return _serialize(note)
 
 
+async def update(db: AsyncSession, *, employee_id: str, note_id: str, body: str, actor: Actor | None) -> dict:
+    note = (
+        await db.execute(
+            select(Note).options(selectinload(Note.author)).where(Note.id == note_id, Note.employee_id == employee_id)
+        )
+    ).scalar_one_or_none()
+    if note is None:
+        raise AppError("Note not found", 404)
+
+    note.body = body
+
+    audit_service.record(
+        db,
+        actor,
+        action="EMPLOYEE_NOTE_UPDATED",
+        entity_type="Employee",
+        entity_id=employee_id,
+        metadata={"noteId": note_id},
+    )
+
+    await db.commit()
+    await db.refresh(note, attribute_names=["author"])
+    return _serialize(note)
+
+
 async def delete(db: AsyncSession, *, employee_id: str, note_id: str, actor: Actor | None) -> None:
     note = (
         await db.execute(select(Note).where(Note.id == note_id, Note.employee_id == employee_id))

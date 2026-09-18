@@ -52,6 +52,11 @@ def _serialize(employee: Employee) -> dict:
         "profileImage": s3.generate_presigned_get_url(employee.profile_image) if employee.profile_image else None,
         "organizationId": employee.organization_id,
         "userId": employee.user_id,
+        # The linked user's role, if any — lets the frontend reason about
+        # who's eligible to be assigned as a department manager without a
+        # separate lookup (see departments_service.py's manager-assignment
+        # flow, which patches this same role via /users/{id}/role).
+        "role": employee.user.role if employee.user is not None else None,
         "createdAt": employee.created_at,
         "updatedAt": employee.updated_at,
     }
@@ -74,7 +79,7 @@ async def list_employees(db: AsyncSession, user: CurrentUser) -> list[dict]:
         employees = (
             await db.execute(
                 select(Employee)
-                .options(selectinload(Employee.department))
+                .options(selectinload(Employee.department), selectinload(Employee.user))
                 .where(Employee.department_id == manager.department_id)
                 .order_by(Employee.created_at.desc())
             )
@@ -83,7 +88,9 @@ async def list_employees(db: AsyncSession, user: CurrentUser) -> list[dict]:
 
     employees = (
         await db.execute(
-            select(Employee).options(selectinload(Employee.department)).order_by(Employee.created_at.desc())
+            select(Employee)
+            .options(selectinload(Employee.department), selectinload(Employee.user))
+            .order_by(Employee.created_at.desc())
         )
     ).scalars().all()
     return [_serialize(e) for e in employees]
@@ -92,7 +99,9 @@ async def list_employees(db: AsyncSession, user: CurrentUser) -> list[dict]:
 async def get_employee(db: AsyncSession, employee_id: str) -> dict | None:
     employee = (
         await db.execute(
-            select(Employee).options(selectinload(Employee.department)).where(Employee.id == employee_id)
+            select(Employee)
+            .options(selectinload(Employee.department), selectinload(Employee.user))
+            .where(Employee.id == employee_id)
         )
     ).scalar_one_or_none()
     return _serialize(employee) if employee is not None else None
@@ -101,7 +110,9 @@ async def get_employee(db: AsyncSession, employee_id: str) -> dict | None:
 async def get_employee_by_user_id(db: AsyncSession, user_id: str) -> dict | None:
     employee = (
         await db.execute(
-            select(Employee).options(selectinload(Employee.department)).where(Employee.user_id == user_id)
+            select(Employee)
+            .options(selectinload(Employee.department), selectinload(Employee.user))
+            .where(Employee.user_id == user_id)
         )
     ).scalar_one_or_none()
     return _serialize(employee) if employee is not None else None

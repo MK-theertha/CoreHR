@@ -21,6 +21,11 @@ for the full matrix).
 
 ## Employees (`/employees`) — `employees.py` → `employees_service.py`
 
+Every employee response includes a `role` field — the linked user's role
+(`SUPER_ADMIN`/`HR_ADMIN`/`MANAGER`/`EMPLOYEE`), or `null` if the employee has
+no linked user account. Not a stored Employee column — resolved via
+`selectinload(Employee.user)` at read time.
+
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | `/employees/me` | 🔑 | Own employee record. 404 if no linked Employee. |
@@ -38,6 +43,7 @@ for the full matrix).
 | GET | `/employees/{id}/activity` | 🔑 (self) or STAFF_ROLES (anyone) | An employee viewing their own record, or SUPER_ADMIN/HR_ADMIN/MANAGER viewing anyone's. 404 (not 403) for a non-staff caller viewing someone else's. Merges Employee-scoped and LeaveRequest-scoped audit entries, paginated. |
 | GET | `/employees/{id}/notes` | SUPER_ADMIN, HR_ADMIN, MANAGER | Internal HR notes — deliberately staff-only, never shown to the employee about themselves. |
 | POST | `/employees/{id}/notes` | SUPER_ADMIN, HR_ADMIN, MANAGER | `{body}`. Audit-logged (`EMPLOYEE_NOTE_CREATED`). |
+| PATCH | `/employees/{id}/notes/{noteId}` | SUPER_ADMIN, HR_ADMIN, MANAGER | `{body}`. Audit-logged (`EMPLOYEE_NOTE_UPDATED`). `createdAt` is unchanged — the audit log entry is the "when was it edited" trail. |
 | DELETE | `/employees/{id}/notes/{noteId}` | SUPER_ADMIN, HR_ADMIN, MANAGER | Audit-logged (`EMPLOYEE_NOTE_DELETED`). |
 
 ## Departments (`/departments`) — `departments.py` → `departments_service.py`
@@ -114,7 +120,7 @@ need revisiting for a bulk/row-level export of raw records.
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | `/users/roles` | SUPER_ADMIN | Returns the static list `["SUPER_ADMIN","HR_ADMIN","MANAGER","EMPLOYEE"]`. |
-| PATCH | `/users/{id}/role` | SUPER_ADMIN | `{role}`. Audit-logged (`USER_ROLE_CHANGED`, records from/to). |
+| PATCH | `/users/{id}/role` | SUPER_ADMIN | `{role}`. Audit-logged (`USER_ROLE_CHANGED`, records from/to). Blind single-user overwrite — no demotion handling of its own. Used by the frontend's "assign manager" dialog on the Department Detail page, which handles promoting the new manager and demoting the previous one as two separate calls. |
 
 ## Audit (`/audit`) — `audit.py` → `audit_service.py`
 

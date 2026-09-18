@@ -1,6 +1,8 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { EmployeeFormDialog } from '../components/employees/employee-form-dialog';
 import { ActivityTab } from '../components/profile/activity-tab';
 import { DocumentsTab } from '../components/profile/documents-tab';
 import { EmploymentTab } from '../components/profile/employment-tab';
@@ -28,7 +30,8 @@ export default function EmployeeDetailPage() {
   const { user } = useAuth();
   const { data: employee, isLoading, isError, error } = useEmployee(id);
   const { data: leaveRequests, isLoading: isLoadingLeave } = useLeaveRequests(id);
-  const canManageDocuments = ADMIN_ROLES.includes(user.role);
+  const canManage = ADMIN_ROLES.includes(user.role);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -73,6 +76,11 @@ export default function EmployeeDetailPage() {
               {employee.phone ? <span>{employee.phone}</span> : null}
             </div>
           </div>
+          {canManage ? (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -100,7 +108,7 @@ export default function EmployeeDetailPage() {
           <LeaveHistoryTab leaveRequests={leaveRequests ?? []} isLoading={isLoadingLeave} />
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab employeeId={employee.id} scope="staff" canDelete={canManageDocuments} />
+          <DocumentsTab employeeId={employee.id} scope="staff" canDelete={canManage} />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityTab employeeId={employee.id} />
@@ -109,6 +117,10 @@ export default function EmployeeDetailPage() {
           <NotesTab employeeId={employee.id} />
         </TabsContent>
       </Tabs>
+
+      {canManage ? (
+        <EmployeeFormDialog open={editOpen} onOpenChange={setEditOpen} editingEmployee={employee} />
+      ) : null}
     </div>
   );
 }

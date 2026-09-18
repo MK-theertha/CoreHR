@@ -52,9 +52,12 @@ tokens directly rather than going through `/login` for most tests).
 - **`test_employee_activity.py`** — self-access (including that a leave
   decision shows up in the feed), staff-access to anyone, cross-user `404`,
   and the paginated response shape.
-- **`test_notes.py`** — staff create/list/delete, and confirms `EMPLOYEE` gets
-  `403` even on their own record (Notes is deliberately staff-only — see
-  [Authorization (RBAC)](./04-authorization-rbac.md)).
+- **`test_notes.py`** — staff create/list/update/delete, and confirms
+  `EMPLOYEE` gets `403` on all of them, even on their own record (Notes is
+  deliberately staff-only — see [Authorization (RBAC)](./04-authorization-rbac.md)).
+- **`test_employees.py`** — confirms the `role` field (the linked user's role,
+  or `null` if unlinked) is present on both `GET /employees` and
+  `GET /employees/{id}` responses.
 
 `pytest.ini` pins `asyncio_default_fixture_loop_scope = session` and
 `asyncio_default_test_loop_scope = session`. This isn't cosmetic: the app's async

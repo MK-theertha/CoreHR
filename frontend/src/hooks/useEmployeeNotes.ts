@@ -25,6 +25,20 @@ export function useCreateEmployeeNote(employeeId: string | undefined) {
   });
 }
 
+export function useUpdateEmployeeNote(employeeId: string | undefined) {
+  const queryClient = useQueryClient();
+  const queryKey = ['employees', employeeId, 'notes'];
+
+  return useMutation({
+    mutationFn: ({ noteId, body }: { noteId: string; body: string }) =>
+      authFetch<ApiResponse<Note>>(`/employees/${employeeId}/notes/${noteId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
+}
+
 export function useDeleteEmployeeNote(employeeId: string | undefined) {
   const queryClient = useQueryClient();
   const queryKey = ['employees', employeeId, 'notes'];

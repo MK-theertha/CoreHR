@@ -34,6 +34,7 @@ export type Employee = {
   profileImage: string | null;
   organizationId: string | null;
   userId: string | null;
+  role: UserRole | null;
   createdAt: string;
   updatedAt: string;
 };

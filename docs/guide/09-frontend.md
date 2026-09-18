@@ -98,9 +98,9 @@ expires mid-use, not a route guard.
 | `SignupPage` | `/signup` | Same plain-state pattern, calls `POST /auth/register`. |
 | `DashboardPage` | `/dashboard` | Role-aware: admins/managers get full KPIs + 4 trend charts + activity feed; plain employees get only the `PERSONAL`-scope summary (trend/activity hooks are conditionally `enabled: false` for them). |
 | `EmployeesPage` | `/employees` | Full CRUD directory: `DataTable`, department/status filters in a `Sheet`, CSV export, bulk delete, `?q=` search synced with the topbar search box. `canManage` (SUPER_ADMIN/HR_ADMIN) gates add/edit/delete. |
-| `EmployeeDetailPage` | `/employees/:id` | One employee + their leave history, tabbed (Overview/Personal/Employment/Leave History/Documents/Activity/Notes — all wired to real data; Notes is staff-only and not shown on the self-service Profile page). |
+| `EmployeeDetailPage` | `/employees/:id` | One employee + their leave history, tabbed (Overview/Personal/Employment/Leave History/Documents/Activity/Notes — all wired to real data; Notes is staff-only and not shown on the self-service Profile page). An "Edit" button (SUPER_ADMIN/HR_ADMIN) opens the same `EmployeeFormDialog` used on the `/employees` list. |
 | `DepartmentsPage` | `/departments` | Grid of department cards; delete is SUPER_ADMIN-only, create/edit is SUPER_ADMIN/HR_ADMIN. |
-| `DepartmentDetailPage` | `/departments/:id` | One department + its employees (filtered client-side from the full employee list); includes a stated placeholder stat ("open positions — not tracked yet"). |
+| `DepartmentDetailPage` | `/departments/:id` | One department + its employees (filtered client-side from the full employee list, editable/removable via the same `EmployeeFormDialog` + `useConfirm` pattern as `/employees`, for SUPER_ADMIN/HR_ADMIN). A SUPER_ADMIN-only "Assign manager" action next to the Manager stat tile opens `AssignManagerDialog`. |
 | `LeavePage` | `/leave` | Stat cards + List/Calendar tabs; approve/reject/cancel actions inline; `canDecide` = SUPER_ADMIN/HR_ADMIN/MANAGER. |
 | `NotificationsPage` | `/notifications` | Notifications grouped client-side into Today/Yesterday/Earlier; per-item and mark-all-read actions. |
 | `ReportsPage` | `/reports` | Four donut-chart cards from the one `/reports/summary` call. |
@@ -180,7 +180,8 @@ mutations that `invalidateQueries` the relevant keys (and `dashboard`/
 | `useAudit.ts` | `useAuditLog` | `GET /audit?pageSize=100` |
 | `useDocuments.ts` | `useDocuments(scope, employeeId?)` — list + `uploadDocument`/`deleteDocument` mutations | `GET/POST/DELETE /employees/{me,:id}/documents...` |
 | `useEmployeeActivity.ts` | `useEmployeeActivity(employeeId)` | `GET /employees/:id/activity` |
-| `useEmployeeNotes.ts` | `useEmployeeNotes(employeeId)`, `useCreateEmployeeNote`, `useDeleteEmployeeNote` | `GET/POST/DELETE /employees/:id/notes...` |
+| `useEmployeeNotes.ts` | `useEmployeeNotes(employeeId)`, `useCreateEmployeeNote`, `useUpdateEmployeeNote`, `useDeleteEmployeeNote` | `GET/POST/PATCH/DELETE /employees/:id/notes...` |
+| `useUsers.ts` | `useUpdateUserRole()` | `PATCH /users/:id/role` |
 | `useTheme.tsx` | `useTheme`, `ThemeProvider` | n/a (localStorage) |
 | `useAuth.tsx` | `useAuth`, `AuthContext` | n/a (context; provider lives in `App.tsx`) |
 

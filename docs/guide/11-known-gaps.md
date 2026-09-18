@@ -28,12 +28,32 @@ document.
   applied** — no AWS resources have actually been created from it). The EC2 IAM
   role does **not** yet include `ses:SendEmail` — email sending needs that added
   before `EMAIL_ENABLED=true` would work in a real deployment.
-- 185 passing pytest tests (auth dependency, RBAC matrix incl. the document
+- 190 passing pytest tests (auth dependency, RBAC matrix incl. the document
   routes, role-guard behavior, document upload/confirm/list/delete against a
   mocked S3 via `moto`, leave workflow incl. mocked email sends, notifications,
   reports/dashboard incl. CSV export, audit log, refresh-token revocation incl. a
   Redis-outage fail-open case, department `openPositions`, per-employee activity,
-  and notes CRUD incl. staff-only RBAC).
+  notes CRUD + edit incl. staff-only RBAC, and the `Employee.role` field).
+- **Employee editing from the Employee Detail and Department Detail pages.**
+  Both now open the existing `EmployeeFormDialog` (previously only reachable
+  from the `/employees` list) — no new dialog, just wiring `canManage`/
+  `onEdit`/`onDelete` through `buildEmployeeColumns` the same way
+  `EmployeesPage.tsx` already does. The Department Detail page's employee
+  table can now edit/remove employees directly, and the Employee Detail page
+  has an "Edit" button (SUPER_ADMIN/HR_ADMIN).
+- **Department manager assignment.** `Employee` responses now include the
+  linked user's `role` (new `selectinload(Employee.user)` + a `role` field in
+  `employees_service._serialize` — additive, no schema change). A new
+  "Assign manager" dialog (SUPER_ADMIN only, matching `PATCH /users/{id}/role`'s
+  backend RBAC) promotes the selected employee's user to `MANAGER` and demotes
+  the previous manager back to `EMPLOYEE`, reusing the existing (previously
+  frontend-unused) role-management endpoint. Candidates are restricted to
+  employees whose current role is `EMPLOYEE`/`MANAGER` — never
+  SUPER_ADMIN/HR_ADMIN — to prevent accidentally demoting an admin account.
+- **Note editing.** `PATCH /employees/{id}/notes/{noteId}` (same `STAFF_ROLES`
+  gate as create/delete), audit-logged as `EMPLOYEE_NOTE_UPDATED`. The
+  frontend's Notes tab now has an inline edit toggle per note instead of
+  delete-and-re-add being the only option.
 - **The frontend Documents tab.** Wired to the existing backend endpoints —
   upload → direct-to-S3 PUT → confirm → list → delete — on both the Profile
   (self-service, `/employees/me/documents...`) and Employee Detail
@@ -84,17 +104,16 @@ document.
   `test_role_restricted_route_allows_permitted_role` really does insert rows.
 - Node backend's own gaps (per its README): schema supports multi-organization but
   only one is ever used; no document/compliance module there either.
-- **Frontend UI stubs that still render but do nothing real**: the Employee
-  Detail / Profile pages' Employment tab's finer details and the Department
-  Detail page's manager-assignment flow are the remaining thin spots — nothing
-  as bare as an `EmptyState` placeholder anymore, but not every field is
-  editable from the UI yet.
 - **Email delivery has no real queue** — SES sends run as FastAPI `BackgroundTasks`
   inline in a gunicorn worker, not a real task queue. Fine at current scale; a
   stuck/slow SES call would tie up a worker under real load. See
   [File Storage & Email](./08-file-storage-and-email.md).
-- **Notes has no edit, only add/delete** — a note can't be corrected in place,
-  only removed and re-added.
+- **`PATCH /users/{id}/role` has no demotion safeguards beyond the frontend's
+  own filtering** — it's a blind single-user role overwrite; the "assign
+  manager" dialog is the only caller today and handles demoting the previous
+  manager itself, but the endpoint itself would let a SUPER_ADMIN patch any
+  user to any role directly (e.g. via `/api-docs`), including demoting another
+  admin. Worth a guard if more callers get added.
 
 ---
 
