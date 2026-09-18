@@ -1,159 +1,123 @@
 # CoreHR — Employee Management Platform
 
 CoreHR is a full-stack workforce management system: employee directory, leave
-requests with an approval workflow, notifications, and a role-aware
-dashboard. It's a monorepo with an Express/Prisma/PostgreSQL API and a
-React/Vite/Tailwind frontend, both fully wired to a real database — no mock
-or in-memory data.
+requests with an approval workflow, in-app + email notifications, audit logging,
+a role-aware dashboard, and CSV report exports — all wired to a real database, no
+mock or in-memory data.
 
-## Tech stack
+**New here? Start with [`docs/guide/`](docs/guide/README.md)** — a from-the-
+ground-up reference covering everything, split into one page per topic: the data
+model, every API endpoint, authentication/RBAC, Redis usage, S3 file storage,
+the frontend, local dev, Docker, CI, and the Terraform AWS infrastructure. It
+assumes no prior familiarity with the codebase. This README is just a
+quick-start pointer.
 
-| Layer    | Stack |
-|----------|-------|
+## The live stack
+
+CoreHR started as a Node/Express/Prisma API and has since been migrated to
+Python/FastAPI/SQLAlchemy — **that's what the frontend actually talks to today**.
+
+| Layer | Stack |
+|---|---|
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS, React Router, TanStack Query, React Hook Form + Zod |
-| Backend  | Express 5, TypeScript, Prisma 7 (`@prisma/adapter-pg`), PostgreSQL, JWT auth, Zod validation |
-| Infra    | Docker Compose (Postgres + Redis + backend + frontend), GitHub Actions CI |
+| Backend (**live**) | `fastapi-backend/` — FastAPI, SQLAlchemy 2.0 (async), PostgreSQL, Alembic, Redis, JWT auth, boto3 (S3 + SES) |
+| Backend (legacy) | `backend/` — Express 5, Prisma 7, PostgreSQL. Still runnable standalone as a rollback path; nothing depends on it anymore and it receives no further changes. |
+| Infra | Docker Compose (Postgres + Redis + both backends + frontend), GitHub Actions CI, Terraform (AWS — written, not yet applied) |
 
 ## Repository layout
 
 ```
-backend/
-  prisma/schema.prisma   # data model (source of truth)
-  prisma/seed.ts         # seeds org, roles, departments, users, sample data
-  prisma.config.ts       # Prisma 7 CLI config (schema path, seed command, datasource URL)
-  src/
-    config/              # env, Prisma client (with pg driver adapter), swagger
-    controllers/         # one per domain: auth, employee, department, leave, notification, dashboard
-    services/             # Prisma queries + business logic live here
-    routes/               # Express routers, per-route Zod validation + RBAC
-    middleware/           # protect (JWT), authorize (role check), validate (Zod), errorHandler
-frontend/
-  src/
-    pages/               # one page per route: Dashboard, Employees, Leave, Notifications, Profile, Login
-    hooks/               # TanStack Query hooks per domain (useEmployees, useLeave, useNotifications, ...) + useAuth context
-    lib/api.ts           # fetch helpers: apiFetch (public) and authFetch (adds bearer token, retries once on 401 via refresh token)
-    types/                # shared TS types mirroring the API response shapes
+fastapi-backend/   # live API — app/api (routers) → app/services (business logic) → SQLAlchemy → Postgres
+  app/core/         # config, JWT, S3, SES email, Redis, rate limiting, error handling
+  app/services/     # business logic per domain (employees, leave, notifications, reports, audit, ...)
+  app/api/v1/       # thin routers — parse request, call one service function, wrap the response
+  alembic/          # database migrations
+  tests/            # pytest suite (174 tests)
+backend/            # legacy Node/Express/Prisma API — rollback path only, see docs/guide/10-legacy-node-backend.md
+frontend/           # React app, talks to fastapi-backend via VITE_API_BASE_URL
+infra/terraform/    # AWS infrastructure as code (VPC, ALB, ASG, RDS, ElastiCache, S3, CloudFront, IAM)
+docs/
+  guide/                  # the full reference, one page per topic — read this for anything beyond a quick start
 ```
 
-## Data model
+## Quick start (Docker Compose — recommended)
 
-Defined in `backend/prisma/schema.prisma`:
+```bash
+docker compose up -d postgres redis
+docker compose up --build fastapi-backend frontend
+```
 
-- **Organization** — top-level tenant; every Department/User/Employee belongs to one (single org is seeded today, but the schema supports more).
-- **Role** — one of `SUPER_ADMIN`, `HR_ADMIN`, `MANAGER`, `EMPLOYEE`.
-- **User** — login identity (email + bcrypt password hash + role). Optionally linked 1:1 to an `Employee`.
-- **Department** — belongs to an Organization, has many Employees.
-- **Employee** — the HR record (name, contact info, job title, department, employment status). Optionally linked to a `User` for self-service login.
-- **LeaveRequest** — belongs to an Employee, has a status (`PENDING`/`APPROVED`/`REJECTED`/`CANCELLED`) and an optional approver `User`.
-- **Notification** — belongs to a `User`; auto-created when a leave request is approved/rejected.
-- **AuditLog** — present in the schema for future use; not yet written to by the API.
+- Frontend: http://localhost:4173
+- FastAPI backend: http://localhost:8100 (health check at `/health`, interactive docs at `/api-docs`)
+- Postgres: host port `5433`, Redis: host port `6380`
 
-## Auth & roles
+The FastAPI container runs `alembic upgrade head` automatically on boot. To seed
+sample data (organization, departments, the accounts below, sample leave
+requests):
 
-JWT-based auth (`Authorization: Bearer <token>`), with short-lived access tokens (15m default) and longer-lived refresh tokens (7d default). The frontend's `authFetch` transparently retries once via `/auth/refresh` on a 401 before forcing logout.
-
-Role permissions, enforced server-side per route:
-
-| Role | Employees | Leave | Notifications | Profile |
-|------|-----------|-------|----------------|---------|
-| SUPER_ADMIN / HR_ADMIN | full CRUD | view all, approve/reject any | own | own (view + edit own fields) |
-| MANAGER | read-only list | view all, approve/reject others' (not own) | own | own |
-| EMPLOYEE | no access to the directory | apply, view own, cancel own pending | own | own |
-
-Public self-registration (`POST /auth/register`) always creates an `EMPLOYEE` — it cannot be used to grant elevated roles.
-
-## API reference
-
-Base path: `/api/v1`. All routes except `/auth/register`, `/auth/login`, `/auth/refresh` require a bearer token.
-
-**Auth** — `auth.routes.ts`
-- `POST /auth/register` — create an EMPLOYEE-role account
-- `POST /auth/login` — returns `{ user, accessToken, refreshToken }`
-- `POST /auth/refresh` — exchange a refresh token for a new access token
-- `GET /auth/me` — current user
-
-**Employees** — `employee.routes.ts`
-- `GET /employees/me` / `PATCH /employees/me` — own employee record (any authenticated user with a linked profile); self-update is limited to `phone`, `gender`, `dateOfBirth`
-- `GET /employees` — list (SUPER_ADMIN, HR_ADMIN, MANAGER)
-- `GET /employees/:id` — single record (+ EMPLOYEE)
-- `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id` — (SUPER_ADMIN, HR_ADMIN)
-
-**Departments** — `department.routes.ts`
-- `GET /departments` — list (any authenticated user)
-- `POST /departments` — create (SUPER_ADMIN, HR_ADMIN)
-
-**Leave** — `leave.routes.ts`
-- `GET /leave` — all requests for admins/managers, own requests only for employees
-- `POST /leave` — apply (requires a linked employee profile)
-- `PATCH /leave/:id/approve` / `PATCH /leave/:id/reject` — (SUPER_ADMIN, HR_ADMIN, MANAGER); creates a notification for the requester
-- `PATCH /leave/:id/cancel` — owner only, pending requests only
-
-**Notifications** — `notification.routes.ts`
-- `GET /notifications` — own notifications
-- `PATCH /notifications/:id/read` / `PATCH /notifications/read-all`
-
-**Dashboard** — `dashboard.routes.ts`
-- `GET /dashboard/summary` — org-wide counts + department breakdown for admins/managers; personal leave/notification counts for employees
-
-**Users** — `user.routes.ts`
-- `GET /users/roles`, `PATCH /users/role` — role listing/update stub (SUPER_ADMIN)
-
-Swagger UI is served at `/api-docs`.
-
-## Getting started (local dev)
-
-1. **Database**: `docker compose up -d postgres` (exposed on host port `5433` to avoid clashing with a local Postgres).
-2. **Backend**:
-   ```bash
-   cd backend
-   npm install
-   cp .env.example .env   # adjust CLIENT_URL/DATABASE_URL if needed
-   npx prisma migrate dev # applies migrations
-   npm run prisma:seed    # seeds roles, departments, and the accounts below
-   npm run dev            # http://localhost:4000
-   ```
-3. **Frontend**:
-   ```bash
-   cd frontend
-   npm install
-   cp .env.example .env
-   npm run dev            # http://localhost:5173 (or next free port)
-   ```
-
-In development, backend CORS accepts any `http://localhost:<port>` origin (see `backend/src/app.ts`), so multiple Vite instances/ports don't require `.env` changes. In production, only the exact origins listed in `CLIENT_URL` are allowed.
+```bash
+cd fastapi-backend
+source .venv/bin/activate   # or: python -m venv .venv && pip install -r requirements.txt
+python scripts/seed.py
+```
 
 ### Seeded test accounts
 
 | Email | Password | Role |
-|-------|----------|------|
+|---|---|---|
 | admin@corehr.dev | Admin@123 | SUPER_ADMIN |
 | manager@corehr.dev | Manager@123 | MANAGER |
 | alicia.morgan@corehr.dev | Employee@123 | EMPLOYEE |
 
-### Useful scripts
+## Running the FastAPI backend standalone (no Docker)
 
-- `backend`: `npm run dev` / `build` / `start`, `npm run prisma:generate`, `npm run prisma:studio`, `npm run prisma:seed`
-- `frontend`: `npm run dev` / `build` / `preview`, `npm run lint`
-- root: `npm run dev:frontend`, `npm run dev:backend`, `npm run build:frontend`, `npm run build:backend` (npm workspaces)
+See [Local Development](docs/guide/12-local-development.md) for the full
+walkthrough (venv setup, `.env`, running Postgres/Redis locally).
 
-## Running with Docker Compose (full stack)
+## Running the tests
 
 ```bash
-docker compose up --build
+cd fastapi-backend
+source .venv/bin/activate
+pytest -q
 ```
 
-- Frontend: http://localhost:4173
-- Backend API: http://localhost:4100 (health check at `/health`)
-- Postgres: host port `5433`, Redis: host port `6380` (Redis is provisioned but not yet used by the API)
-
-Note: the Compose backend service doesn't run migrations/seed automatically — run them against the container's database the same way as local dev, pointing `DATABASE_URL` at the compose Postgres instance.
+174 tests: RBAC permission matrix, auth (incl. refresh-token revocation), leave
+workflow, notifications, reports/dashboard (incl. CSV export), audit logging, and
+document upload against a mocked S3. See [Testing](docs/guide/14-testing.md) for
+details and caveats (tests run against a real Postgres + Redis, not mocks).
 
 ## CI
 
-`.github/workflows/ci.yml` installs dependencies and runs `npm run build` for both frontend and backend on every push/PR to `main`/`master`.
+`.github/workflows/ci.yml` runs two jobs on every push/PR to `main`: one lints/
+tests/builds the legacy Node backend, and one spins up real Postgres + Redis
+service containers, runs Alembic migrations, runs the FastAPI pytest suite, and
+does a Docker build sanity check. See [CI/CD](docs/guide/15-cicd.md).
 
-## Known gaps / not yet implemented
+## Full documentation
 
-- No document/compliance module, audit logging is schema-only (not written to), and there's no organization/permission management UI — the schema anticipates these but the API doesn't expose them yet.
-- Redis is provisioned in Compose but unused by the app.
-- Single-organization only in practice today, even though the schema supports multiple.
+Everything else — the complete data model, every API endpoint with its exact
+role requirements, how JWT auth and refresh-token revocation work, RBAC
+internals, Redis usage (caching, rate limiting, revocation), S3 file storage and
+SES email notifications, the frontend architecture, environment variables, and
+the Terraform AWS topology — lives in **[`docs/guide/`](docs/guide/README.md)**,
+one page per topic:
+
+1. [Overview](docs/guide/01-overview.md)
+2. [Data Model](docs/guide/02-data-model.md)
+3. [Authentication](docs/guide/03-authentication.md)
+4. [Authorization (RBAC)](docs/guide/04-authorization-rbac.md)
+5. [Backend Architecture](docs/guide/05-backend-architecture.md)
+6. [API Reference](docs/guide/06-api-reference.md)
+7. [Redis Usage](docs/guide/07-redis.md)
+8. [File Storage & Email](docs/guide/08-file-storage-and-email.md)
+9. [Frontend Architecture](docs/guide/09-frontend.md)
+10. [Legacy Node Backend](docs/guide/10-legacy-node-backend.md)
+11. [Current State & Known Gaps](docs/guide/11-known-gaps.md)
+12. [Local Development](docs/guide/12-local-development.md)
+13. [Docker & Docker Compose](docs/guide/13-docker.md)
+14. [Testing](docs/guide/14-testing.md)
+15. [CI/CD (GitHub Actions)](docs/guide/15-cicd.md)
+16. [Terraform / AWS Infrastructure](docs/guide/16-terraform.md)
+17. [Environment Variables](docs/guide/17-environment-variables.md)
+18. [Glossary](docs/guide/18-glossary.md)
