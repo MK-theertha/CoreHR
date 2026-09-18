@@ -2,6 +2,8 @@ import { lazy, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 import { AppShell } from './components/layout/app-shell';
+import { navItems, STAFF_ROLES } from './components/layout/nav-items';
+import { ProtectedRoute } from './components/layout/protected-route';
 import { AuthContext } from './hooks/useAuth';
 import { apiFetch, authFetch, clearTokens, getAccessToken, logoutRequest, setTokens, UNAUTHORIZED_EVENT } from './lib/api';
 import type { AppUser } from './types';
@@ -138,14 +140,42 @@ function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          <Route
+            path="/employees"
+            element={
+              <ProtectedRoute roles={STAFF_ROLES}>
+                <EmployeesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employees/:id"
+            element={
+              <ProtectedRoute roles={STAFF_ROLES}>
+                <EmployeeDetailPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/departments" element={<DepartmentsPage />} />
           <Route path="/departments/:id" element={<DepartmentDetailPage />} />
           <Route path="/leave" element={<LeavePage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/audit" element={<AuditLogPage />} />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute roles={navItems.find((item) => item.to === '/reports')!.roles}>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/audit"
+            element={
+              <ProtectedRoute roles={navItems.find((item) => item.to === '/audit')!.roles}>
+                <AuditLogPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

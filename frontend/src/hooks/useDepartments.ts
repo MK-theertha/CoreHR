@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authFetch } from '../lib/api';
 import type { ApiResponse, Department } from '../types';
 
-export type DepartmentInput = { name: string };
+export type DepartmentInput = { name: string; openPositions?: number };
 
 export function useDepartments() {
   return useQuery({

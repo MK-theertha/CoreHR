@@ -15,15 +15,20 @@ import { ErrorBanner } from '../components/ui/error-banner';
 import { PageHeader } from '../components/ui/page-header';
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useAuth } from '../hooks/useAuth';
 import { useEmployee } from '../hooks/useEmployees';
 import { useLeaveRequests } from '../hooks/useLeave';
 import { initials } from '../lib/format';
 
+const ADMIN_ROLES = ['SUPER_ADMIN', 'HR_ADMIN'];
+
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: employee, isLoading, isError, error } = useEmployee(id);
   const { data: leaveRequests, isLoading: isLoadingLeave } = useLeaveRequests(id);
+  const canManageDocuments = ADMIN_ROLES.includes(user.role);
 
   if (isLoading) {
     return (
@@ -95,13 +100,13 @@ export default function EmployeeDetailPage() {
           <LeaveHistoryTab leaveRequests={leaveRequests ?? []} isLoading={isLoadingLeave} />
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab />
+          <DocumentsTab employeeId={employee.id} scope="staff" canDelete={canManageDocuments} />
         </TabsContent>
         <TabsContent value="activity">
-          <ActivityTab />
+          <ActivityTab employeeId={employee.id} />
         </TabsContent>
         <TabsContent value="notes">
-          <NotesTab />
+          <NotesTab employeeId={employee.id} />
         </TabsContent>
       </Tabs>
     </div>

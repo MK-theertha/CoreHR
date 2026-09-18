@@ -18,9 +18,11 @@ export type NavItem = {
   roles: string[];
 };
 
+export const STAFF_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'];
+
 export const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
-  { label: 'Employees', to: '/employees', icon: Users, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER'] },
+  { label: 'Employees', to: '/employees', icon: Users, roles: STAFF_ROLES },
   { label: 'Departments', to: '/departments', icon: Building2, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
   { label: 'Leave', to: '/leave', icon: CalendarDays, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },
   { label: 'Notifications', to: '/notifications', icon: Bell, roles: ['SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'EMPLOYEE'] },

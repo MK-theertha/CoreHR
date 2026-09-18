@@ -12,6 +12,7 @@ export type EmploymentStatus = 'ACTIVE' | 'PROBATION' | 'INACTIVE' | 'TERMINATED
 export type Department = {
   id: string;
   name: string;
+  openPositions: number | null;
   organizationId: string;
   createdAt: string;
   employeeCount: number;
@@ -81,6 +82,8 @@ export type DashboardSummary =
       rejectedLeaveRequests: number;
       newEmployees: number;
       departmentBreakdown: { name: string; employeeCount: number }[];
+      presentToday: number;
+      onLeaveToday: number;
     }
   | {
       scope: 'PERSONAL';
@@ -138,4 +141,22 @@ export type AuditLogResponse = {
   success: boolean;
   data: AuditLogEntry[];
   meta: { total: number; page: number; pageSize: number };
+};
+
+export type Document = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number | null;
+  downloadUrl: string | null;
+  uploadedBy: string | null;
+  createdAt: string;
+};
+
+export type Note = {
+  id: string;
+  employeeId: string;
+  body: string;
+  createdAt: string;
+  author: { id: string; name: string } | null;
 };

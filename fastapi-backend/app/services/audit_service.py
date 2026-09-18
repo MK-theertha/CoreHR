@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import AuditLog
+from app.db.models import AuditLog, LeaveRequest
 
 
 @dataclass
@@ -91,6 +91,45 @@ async def list_entries(
 
     return {
         "entries": [_serialize(entry) for entry in entries],
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+    }
+
+
+async def list_for_employee(db: AsyncSession, employee_id: str, *, page: int | None = None, page_size: int | None = None) -> dict:
+    """A per-employee activity feed. Entries recording something done directly
+    to the Employee row (entity_type="Employee") don't cover leave decisions —
+    those are recorded against the LeaveRequest's own id, not the employee's —
+    so this unions both and sorts in Python rather than a single filtered
+    query, since the two live under different entity_type/entity_id pairs."""
+    page = page if page and page >= 1 else 1
+    page_size = page_size if page_size and 1 <= page_size <= 100 else 25
+
+    employee_entries = (
+        await db.execute(
+            select(AuditLog)
+            .options(selectinload(AuditLog.user))
+            .where(AuditLog.entity_type == "Employee", AuditLog.entity_id == employee_id)
+        )
+    ).scalars().all()
+
+    leave_entries = (
+        await db.execute(
+            select(AuditLog)
+            .options(selectinload(AuditLog.user))
+            .join(LeaveRequest, AuditLog.entity_id == LeaveRequest.id)
+            .where(AuditLog.entity_type == "LeaveRequest", LeaveRequest.employee_id == employee_id)
+        )
+    ).scalars().all()
+
+    all_entries = sorted([*employee_entries, *leave_entries], key=lambda entry: entry.timestamp, reverse=True)
+    total = len(all_entries)
+    start = (page - 1) * page_size
+    page_entries = all_entries[start : start + page_size]
+
+    return {
+        "entries": [_serialize(entry) for entry in page_entries],
         "total": total,
         "page": page,
         "pageSize": page_size,

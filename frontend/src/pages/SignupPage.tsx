@@ -1,5 +1,8 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
+import { z } from 'zod';
 
 import { AuthLayout } from '../components/layout/auth-layout';
 import { Button } from '../components/ui/button';
@@ -11,21 +14,34 @@ type SignupPageProps = {
   onSignup: (name: string, email: string, password: string) => Promise<void>;
 };
 
+const signupFormSchema = z.object({
+  name: z.string().min(2, 'Name is required').max(120),
+  email: z.email('Enter a valid email'),
+  password: z.string().min(8, 'Must be at least 8 characters').max(128),
+});
+
+type SignupFormValues = z.infer<typeof signupFormSchema>;
+
 export default function SignupPage({ onSignup }: SignupPageProps) {
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupFormSchema),
+    defaultValues: { name: '', email: '', password: '' },
+  });
+
+  const onSubmit = async (values: SignupFormValues) => {
     setError('');
     setIsSubmitting(true);
 
     try {
-      await onSignup(name, email, password);
+      await onSignup(values.name, values.email, values.password);
       navigate('/dashboard');
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : 'Unable to sign up. Please try again.');
@@ -36,17 +52,17 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
 
   return (
     <AuthLayout title="Create your account" subtitle="Get started with your CoreHR workspace">
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <FormField label="Full name" htmlFor="name">
-          <Input id="name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+      <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <FormField label="Full name" htmlFor="name" error={errors.name}>
+          <Input id="name" autoFocus {...register('name')} />
         </FormField>
 
-        <FormField label="Email" htmlFor="email">
-          <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        <FormField label="Email" htmlFor="email" error={errors.email}>
+          <Input id="email" type="email" {...register('email')} />
         </FormField>
 
-        <FormField label="Password" htmlFor="password" hint="Must be at least 8 characters.">
-          <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        <FormField label="Password" htmlFor="password" error={errors.password} hint="Must be at least 8 characters.">
+          <Input id="password" type="password" {...register('password')} />
         </FormField>
 
         {error ? <ErrorBanner message={error} /> : null}

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.deps import CurrentUser, get_current_user, get_db, require_roles
-from app.schemas.common import ok
+from app.schemas.common import ok, ok_paginated
 from app.schemas.documents import DocumentConfirmRequest, DocumentUploadUrlRequest
 from app.schemas.employees import (
     EmployeeCreateRequest,
@@ -11,7 +11,7 @@ from app.schemas.employees import (
     EmployeeUpdateRequest,
     ProfileImageUploadUrlRequest,
 )
-from app.services import documents_service, employees_service
+from app.services import audit_service, documents_service, employees_service
 from app.services.audit_service import Actor
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -126,6 +126,23 @@ async def get_employee(employee_id: str, db: AsyncSession = Depends(get_db)):
     if employee is None:
         raise AppError("Employee not found", 404)
     return ok(employee)
+
+
+@router.get("/{employee_id}/activity")
+async def get_employee_activity(
+    employee_id: str,
+    page: int | None = None,
+    pageSize: int | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.role not in STAFF_ROLES:
+        own_employee = await employees_service.get_employee_by_user_id(db, user.id)
+        if own_employee is None or own_employee["id"] != employee_id:
+            raise AppError("Employee not found", 404)
+
+    result = await audit_service.list_for_employee(db, employee_id, page=page, page_size=pageSize)
+    return ok_paginated(result["entries"], total=result["total"], page=result["page"], page_size=result["pageSize"])
 
 
 @router.post("/{employee_id}/documents/upload-url", dependencies=[Depends(require_roles(*ADMIN_ROLES))])

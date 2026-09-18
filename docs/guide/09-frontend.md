@@ -72,15 +72,18 @@ wrapper component. Instead, the whole route tree branches on auth state:
   `/departments/:id`, `/leave`, `/notifications`, `/reports`, `/audit`,
   `/settings`, `/profile`, plus `/` and `*` both redirecting to `/dashboard`.
 
-**There is no route-level role guard.** Role-based UI restriction happens by
-*not showing* nav links for disallowed roles (`nav-items.ts` filters by
-`user.role`) and by pages conditionally rendering content — but nothing stops a
-`MANAGER` from typing `/reports` into the address bar; the page will render and
-its data hook will fire, at which point the **backend** is what actually returns
-`403`. This matches the project-wide principle that authorization is a backend
-concern — see [Authorization (RBAC)](./04-authorization-rbac.md) — but it does
-mean a disallowed user briefly sees a broken/empty page rather than a clean "not
-allowed" redirect.
+**Route-level role guard**: `components/layout/protected-route.tsx` exports
+`ProtectedRoute({ roles, children })` — reads `useAuth().user.role`, and if it's
+not in `roles`, shows a toast (`"You don't have permission to view that page"`)
+and `<Navigate to="/dashboard" replace />` instead of rendering `children`.
+Wraps `/employees`, `/employees/:id`, `/reports`, and `/audit` in `App.tsx` —
+the only routes with a restricted role set — reusing `nav-items.ts`'s existing
+per-route role lists as the single source of truth (no separate role list to
+keep in sync). The other 7 routes stay open to all four roles, matching the
+backend's own permission matrix — see
+[Authorization (RBAC)](./04-authorization-rbac.md). Backend `403`s are still the
+real enforcement underneath; this guard is a UX improvement (redirect instead of
+a broken/empty page), not a second security boundary.
 
 A global `window` event, `UNAUTHORIZED_EVENT` (dispatched from `lib/api.ts` when a
 refresh-on-401 attempt fails), is caught in `App.tsx` to force logout + redirect
@@ -95,7 +98,7 @@ expires mid-use, not a route guard.
 | `SignupPage` | `/signup` | Same plain-state pattern, calls `POST /auth/register`. |
 | `DashboardPage` | `/dashboard` | Role-aware: admins/managers get full KPIs + 4 trend charts + activity feed; plain employees get only the `PERSONAL`-scope summary (trend/activity hooks are conditionally `enabled: false` for them). |
 | `EmployeesPage` | `/employees` | Full CRUD directory: `DataTable`, department/status filters in a `Sheet`, CSV export, bulk delete, `?q=` search synced with the topbar search box. `canManage` (SUPER_ADMIN/HR_ADMIN) gates add/edit/delete. |
-| `EmployeeDetailPage` | `/employees/:id` | One employee + their leave history, tabbed (Overview/Personal/Employment/Leave History/Documents/Activity/Notes — **the last three tabs are UI placeholders, not wired to real data**). |
+| `EmployeeDetailPage` | `/employees/:id` | One employee + their leave history, tabbed (Overview/Personal/Employment/Leave History/Documents/Activity/Notes — all wired to real data; Notes is staff-only and not shown on the self-service Profile page). |
 | `DepartmentsPage` | `/departments` | Grid of department cards; delete is SUPER_ADMIN-only, create/edit is SUPER_ADMIN/HR_ADMIN. |
 | `DepartmentDetailPage` | `/departments/:id` | One department + its employees (filtered client-side from the full employee list); includes a stated placeholder stat ("open positions — not tracked yet"). |
 | `LeavePage` | `/leave` | Stat cards + List/Calendar tabs; approve/reject/cancel actions inline; `canDecide` = SUPER_ADMIN/HR_ADMIN/MANAGER. |
@@ -103,7 +106,7 @@ expires mid-use, not a route guard.
 | `ReportsPage` | `/reports` | Four donut-chart cards from the one `/reports/summary` call. |
 | `AuditLogPage` | `/audit` | Audit trail table (up to 100 rows), formatted actor/action/entity/metadata columns. |
 | `SettingsPage` | `/settings` | Appearance (theme toggle, anyone) + organization name edit (SUPER_ADMIN only). |
-| `ProfilePage` | `/profile` | Own employee record, same tab layout as the detail page but the Personal tab is editable here. |
+| `ProfilePage` | `/profile` | Own employee record, same tab layout as the detail page but the Personal tab is editable here and the staff-only Notes tab is omitted. |
 
 ## 4. API layer — `src/lib/api.ts`
 
@@ -175,6 +178,9 @@ mutations that `invalidateQueries` the relevant keys (and `dashboard`/
 | `useProfile.ts` | `useMyProfile` (`retry: false`), `useUpdateMyProfile` | `GET/PATCH /employees/me` |
 | `useReports.ts` | `useReportsSummary` | `GET /reports/summary` |
 | `useAudit.ts` | `useAuditLog` | `GET /audit?pageSize=100` |
+| `useDocuments.ts` | `useDocuments(scope, employeeId?)` — list + `uploadDocument`/`deleteDocument` mutations | `GET/POST/DELETE /employees/{me,:id}/documents...` |
+| `useEmployeeActivity.ts` | `useEmployeeActivity(employeeId)` | `GET /employees/:id/activity` |
+| `useEmployeeNotes.ts` | `useEmployeeNotes(employeeId)`, `useCreateEmployeeNote`, `useDeleteEmployeeNote` | `GET/POST/DELETE /employees/:id/notes...` |
 | `useTheme.tsx` | `useTheme`, `ThemeProvider` | n/a (localStorage) |
 | `useAuth.tsx` | `useAuth`, `AuthContext` | n/a (context; provider lives in `App.tsx`) |
 
@@ -232,10 +238,12 @@ target can change while the dialog stays mounted), and uses a sentinel string
 (`'__unassigned__'`) to represent "no department" in the `Select` since Radix's
 `Select` can't hold an empty-string value — converted back to `null` on submit.
 
-**Two deliberate exceptions to this pattern**: `LoginPage`/`SignupPage` (plain
-`useState`, no client-side schema — see §3 above) and the Profile page's
-**Personal** tab (`components/profile/personal-tab.tsx`), which is a hand-rolled
-edit-toggle form with local `useState` synced via `useEffect`, not RHF/Zod at all.
+`LoginPage`, `SignupPage`, and the Profile page's **Personal** tab
+(`components/profile/personal-tab.tsx`) follow this same pattern too now — no
+remaining exceptions. The Personal tab keeps its `isEditing` local-state toggle
+(view vs. edit mode is a UI concern, not a form-validation one) but its actual
+field data now goes through `useForm({ resolver, values })` instead of a manual
+`useState` + `useEffect` re-sync.
 
 ## 9. Components (`src/components/`)
 
@@ -264,8 +272,11 @@ edit-toggle form with local `useState` synced via `useEffect`, not RHF/Zod at al
 - **Domain folders** (`dashboard/`, `employees/`, `departments/`, `leave/`,
   `profile/`, `reports/`, `settings/`, `audit/`) hold the composed,
   page-specific pieces (dialogs, tabs, cards) built from the above primitives.
-  Notable stubs: `profile/documents-tab.tsx`, `activity-tab.tsx`, `notes-tab.tsx`
-  each just render an `EmptyState` — not wired to any real data or endpoint.
+  `profile/documents-tab.tsx`, `activity-tab.tsx`, and `notes-tab.tsx` are all
+  wired to real endpoints (`useDocuments`, `useEmployeeActivity`,
+  `useEmployeeNotes` respectively) — `documents-tab.tsx` also owns the app's
+  only direct-to-S3 upload flow (`lib/uploadToPresignedUrl.ts`, a plain `fetch`
+  deliberately bypassing `authFetch` since it targets S3, not the API).
 
 ## 10. Styling
 

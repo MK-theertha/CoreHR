@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -62,6 +62,7 @@ class Department(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    open_positions: Mapped[int | None] = mapped_column("openPositions", Integer, nullable=True)
     organization_id: Mapped[str] = mapped_column(
         "organizationId",
         String,
@@ -113,6 +114,7 @@ class Employee(Base):
     department: Mapped["Department | None"] = relationship(back_populates="employees")
     user: Mapped["User | None"] = relationship(back_populates="employee")
     leave_requests: Mapped[list["LeaveRequest"]] = relationship(back_populates="employee")
+    notes: Mapped[list["Note"]] = relationship(back_populates="employee")
 
 
 class LeaveRequest(Base):
@@ -216,3 +218,33 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
 
     uploader: Mapped["User | None"] = relationship()
+
+
+class Note(Base):
+    """An internal HR note about an Employee (e.g. "verbal warning given").
+    Staff-only — never exposed on the employee's own self-service views. A
+    direct FK, not the Document/AuditLog polymorphic (entityType, entityId)
+    pattern — notes only ever attach to an Employee, so polymorphism would
+    buy nothing here."""
+
+    __tablename__ = "Note"
+    __table_args__ = (Index("Note_employeeId_idx", "employeeId"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_cuid)
+    employee_id: Mapped[str] = mapped_column(
+        "employeeId",
+        String,
+        ForeignKey("Employee.id", ondelete="CASCADE", name="Note_employeeId_fkey"),
+        nullable=False,
+    )
+    author_id: Mapped[str | None] = mapped_column(
+        "authorId",
+        String,
+        ForeignKey("User.id", ondelete="SET NULL", name="Note_authorId_fkey"),
+        nullable=True,
+    )
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column("createdAt", DateTime, default=_utcnow)
+
+    employee: Mapped["Employee"] = relationship(back_populates="notes")
+    author: Mapped["User | None"] = relationship()

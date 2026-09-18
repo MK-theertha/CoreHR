@@ -13,6 +13,7 @@ import { Input } from '../ui/input';
 
 const departmentFormSchema = z.object({
   name: z.string().min(2, 'Name is required').max(80),
+  openPositions: z.string().optional(),
 });
 
 type DepartmentFormValues = z.infer<typeof departmentFormSchema>;
@@ -35,15 +36,19 @@ export function DepartmentFormDialog({ open, onOpenChange, editingDepartment }: 
     formState: { errors },
   } = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentFormSchema),
-    values: { name: editingDepartment?.name ?? '' },
+    values: {
+      name: editingDepartment?.name ?? '',
+      openPositions: editingDepartment?.openPositions != null ? String(editingDepartment.openPositions) : '',
+    },
   });
 
   const mutation = isEditing ? updateDepartment : createDepartment;
 
   const onSubmit = (values: DepartmentFormValues) => {
+    const payload = { name: values.name, openPositions: values.openPositions ? Number(values.openPositions) : undefined };
     const action = isEditing
-      ? updateDepartment.mutateAsync({ id: editingDepartment.id, payload: values })
-      : createDepartment.mutateAsync(values);
+      ? updateDepartment.mutateAsync({ id: editingDepartment.id, payload })
+      : createDepartment.mutateAsync(payload);
 
     action
       .then(() => {
@@ -70,6 +75,10 @@ export function DepartmentFormDialog({ open, onOpenChange, editingDepartment }: 
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <FormField label="Department name" htmlFor="name" error={errors.name}>
             <Input id="name" {...register('name')} />
+          </FormField>
+
+          <FormField label="Open positions" htmlFor="openPositions" error={errors.openPositions}>
+            <Input id="openPositions" type="number" min={0} {...register('openPositions')} />
           </FormField>
 
           {mutation.isError ? <ErrorBanner message={(mutation.error as Error).message} /> : null}

@@ -14,7 +14,12 @@ export function KpiRow({ summary }: { summary: DashboardSummary }) {
         <StatCard label="Pending leaves" value={summary.pendingLeaveRequests} icon={Clock} />
         <StatCard label="Approved leaves" value={summary.approvedLeaveRequests} icon={CheckCircle2} />
         <StatCard label="Rejected leaves" value={summary.rejectedLeaveRequests} icon={XCircle} />
-        <StatCard label="Today's attendance" value="—" icon={CalendarClock} placeholder hint="Not tracked yet" />
+        <StatCard
+          label="Today's attendance"
+          value={summary.presentToday}
+          icon={CalendarClock}
+          hint={`${summary.onLeaveToday} on leave today`}
+        />
       </div>
     );
   }

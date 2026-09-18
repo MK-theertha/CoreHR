@@ -2,7 +2,6 @@ import { ActivityTab } from '../components/profile/activity-tab';
 import { DocumentsTab } from '../components/profile/documents-tab';
 import { EmploymentTab } from '../components/profile/employment-tab';
 import { LeaveHistoryTab } from '../components/profile/leave-history-tab';
-import { NotesTab } from '../components/profile/notes-tab';
 import { OverviewTab } from '../components/profile/overview-tab';
 import { PersonalTab } from '../components/profile/personal-tab';
 import { EmploymentStatusBadge } from '../components/shared/status-badge';
@@ -72,7 +71,6 @@ export default function ProfilePage() {
           <TabsTrigger value="leave">Leave History</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -94,13 +92,10 @@ export default function ProfilePage() {
           <LeaveHistoryTab leaveRequests={leaveRequests ?? []} isLoading={isLoadingLeave} />
         </TabsContent>
         <TabsContent value="documents">
-          <DocumentsTab />
+          <DocumentsTab employeeId={employee.id} scope="me" canDelete />
         </TabsContent>
         <TabsContent value="activity">
-          <ActivityTab />
-        </TabsContent>
-        <TabsContent value="notes">
-          <NotesTab />
+          <ActivityTab employeeId={employee.id} />
         </TabsContent>
       </Tabs>
     </div>

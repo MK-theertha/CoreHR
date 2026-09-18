@@ -49,6 +49,16 @@ matrix for every route:
 `POST /auth/register` is public and **always** creates an `EMPLOYEE` — there is no
 way to self-register into a higher role.
 
+Two routes added since this matrix was last verified against `test_rbac.py` have
+their own dedicated test files instead (`test_employee_activity.py`,
+`test_notes.py`), since they don't fit the simple "fixed role list" shape the
+matrix above captures:
+
+| Endpoint | SUPER_ADMIN | HR_ADMIN | MANAGER | EMPLOYEE |
+|---|:---:|:---:|:---:|:---:|
+| `GET /employees/{id}/activity` | ✅ (any) | ✅ (any) | ✅ (any) | ✅ (own record only — 404 for anyone else's) |
+| `GET/POST/DELETE /employees/{id}/notes...` | ✅ | ✅ | ✅ | ❌ (even for their own record) |
+
 ---
 
 [← Authentication](./03-authentication.md) · Next: [Backend Architecture →](./05-backend-architecture.md)

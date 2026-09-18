@@ -13,6 +13,16 @@ async def test_dashboard_summary_available_to_any_authenticated_user(client):
     assert response.status_code == 200
 
 
+async def test_dashboard_summary_org_scope_includes_attendance(client):
+    response = await client.get("/api/v1/dashboard/summary", headers=auth_header(role="SUPER_ADMIN"))
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["scope"] == "ORGANIZATION"
+    assert "presentToday" in data
+    assert "onLeaveToday" in data
+    assert data["presentToday"] == data["activeEmployees"] - data["onLeaveToday"]
+
+
 async def test_trends_requires_elevated_role(client):
     response = await client.get("/api/v1/dashboard/trends", headers=auth_header(role="EMPLOYEE"))
     assert response.status_code == 403

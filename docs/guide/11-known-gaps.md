@@ -28,11 +28,40 @@ document.
   applied** — no AWS resources have actually been created from it). The EC2 IAM
   role does **not** yet include `ses:SendEmail` — email sending needs that added
   before `EMAIL_ENABLED=true` would work in a real deployment.
-- 174 passing pytest tests (auth dependency, RBAC matrix incl. the document
+- 185 passing pytest tests (auth dependency, RBAC matrix incl. the document
   routes, role-guard behavior, document upload/confirm/list/delete against a
   mocked S3 via `moto`, leave workflow incl. mocked email sends, notifications,
-  reports/dashboard incl. CSV export, audit log, and refresh-token revocation
-  incl. a Redis-outage fail-open case).
+  reports/dashboard incl. CSV export, audit log, refresh-token revocation incl. a
+  Redis-outage fail-open case, department `openPositions`, per-employee activity,
+  and notes CRUD incl. staff-only RBAC).
+- **The frontend Documents tab.** Wired to the existing backend endpoints —
+  upload → direct-to-S3 PUT → confirm → list → delete — on both the Profile
+  (self-service, `/employees/me/documents...`) and Employee Detail
+  (staff-facing, `/employees/{id}/documents...`) pages. Client-side
+  content-type allowlist matches the backend's. `DELETE` is restricted to
+  SUPER_ADMIN/HR_ADMIN on the staff-facing variant.
+- **A client-side route guard.** `ProtectedRoute` wraps `/employees`,
+  `/employees/:id`, `/reports`, and `/audit` — a disallowed role now gets
+  redirected to `/dashboard` with a toast instead of a rendered-then-403 page.
+  Reuses `nav-items.ts`'s existing role lists as the single source of truth.
+- **Form pattern consistency.** `LoginPage`, `SignupPage`, and the Profile
+  page's Personal tab now use React Hook Form + Zod, matching every other form
+  in the app.
+- **Per-employee Activity tab**, backed by a new
+  `audit_service.list_for_employee` (unions Employee-scoped and
+  LeaveRequest-scoped audit entries for that employee) and
+  `GET /employees/{id}/activity` — self-viewable by the employee, viewable for
+  anyone by SUPER_ADMIN/HR_ADMIN/MANAGER.
+- **Notes tab**, backed by a new `Note` table (direct FK to Employee, not the
+  Document/AuditLog polymorphic pattern) and `/employees/{id}/notes`
+  endpoints — deliberately staff-only (SUPER_ADMIN/HR_ADMIN/MANAGER), both
+  read and write; not shown at all on the employee's own Profile page.
+- **Dashboard "today's attendance."** Computed with zero schema change —
+  active employees minus those on an approved leave covering today — added to
+  `dashboard_service._org_summary` as `presentToday`/`onLeaveToday`.
+- **Department "open positions."** A new nullable `openPositions` column,
+  settable from the department create/edit dialog, shown on the Department
+  Detail page.
 - **The frontend cutover.** `VITE_API_BASE_URL` now points at `fastapi-backend`
   everywhere (local `.env`, Docker Compose, the Dockerfile's build-time default);
   `docker-compose.yml`'s `frontend` service depends on `fastapi-backend`, not
@@ -46,11 +75,6 @@ document.
 
 ## Not implemented / explicitly deferred
 
-- **The frontend doesn't have UI for the document endpoints yet** — the Employee
-  Detail / Profile pages' Documents tab is still the `EmptyState` placeholder
-  noted in [Frontend Architecture](./09-frontend.md); the backend capability
-  exists but nothing calls it. Same precedent as profile images, which also
-  shipped backend-first.
 - **Terraform has never been applied** — writing IaC and provisioning real AWS
   infrastructure are different milestones; only the former is done.
 - **No linter configured for the Python backend** (no ruff/flake8 config) — CI
@@ -60,25 +84,17 @@ document.
   `test_role_restricted_route_allows_permitted_role` really does insert rows.
 - Node backend's own gaps (per its README): schema supports multi-organization but
   only one is ever used; no document/compliance module there either.
-- **Frontend UI stubs that render but do nothing real**: the Employee Detail /
-  Profile pages' Documents, Activity, and Notes tabs are `EmptyState` placeholders
-  with no backing endpoint; the Department Detail page's "open positions" stat is
-  hardcoded as "not tracked yet"; the Dashboard's "today's attendance" stat is the
-  same. None of these have any backend support to wire up to yet.
-- **Frontend has no route-level role guard** — disallowed roles are kept off
-  restricted pages by simply not showing the nav link, not by blocking the route;
-  navigating directly to a restricted URL renders the page and lets the backend's
-  `403` be the real enforcement (correct in principle — auth is a backend
-  concern — but means a disallowed user briefly sees a broken/empty page instead
-  of a redirect).
-- **Frontend form-pattern inconsistency**: `LoginPage`/`SignupPage` and the
-  Profile page's Personal tab don't use the React Hook Form + Zod pattern the rest
-  of the app uses — plain `useState` instead, worth normalizing if anyone touches
-  those files next.
+- **Frontend UI stubs that still render but do nothing real**: the Employee
+  Detail / Profile pages' Employment tab's finer details and the Department
+  Detail page's manager-assignment flow are the remaining thin spots — nothing
+  as bare as an `EmptyState` placeholder anymore, but not every field is
+  editable from the UI yet.
 - **Email delivery has no real queue** — SES sends run as FastAPI `BackgroundTasks`
   inline in a gunicorn worker, not a real task queue. Fine at current scale; a
   stuck/slow SES call would tie up a worker under real load. See
   [File Storage & Email](./08-file-storage-and-email.md).
+- **Notes has no edit, only add/delete** — a note can't be corrected in place,
+  only removed and re-added.
 
 ---
 

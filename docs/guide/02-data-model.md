@@ -36,6 +36,7 @@ belongs to one. Only one is ever seeded in practice.
 |---|---|---|
 | id | string (cuid) | PK |
 | name | string | |
+| openPositions | int? | admin-settable, no computed default — `null` means "not set," not zero |
 | organizationId | string | FK → Organization, `ON DELETE RESTRICT` (not nullable) |
 | createdAt | timestamp | |
 
@@ -107,6 +108,22 @@ tables — one Document row per uploaded file.
 
 Indexed on `(entityType, entityId)`. Added in migration `b86b3869e795_add_document_table.py`.
 
+**Note** — internal HR notes about an Employee (e.g. "verbal warning given"). A
+**direct FK to Employee**, not the Document/AuditLog polymorphic
+`(entityType, entityId)` pattern — notes only ever attach to an Employee, so
+polymorphism buys nothing here. Deliberately staff-only at the API layer (see
+[API Reference](./06-api-reference.md)) — never exposed on the employee's own
+self-service views.
+| Column | Type | Notes |
+|---|---|---|
+| id | string (cuid) | PK |
+| employeeId | string | FK → Employee, `ON DELETE CASCADE` |
+| authorId | string? | FK → User, `ON DELETE SET NULL` |
+| body | string | |
+| createdAt | timestamp | |
+
+Indexed on `employeeId`. Added in migration `866356fc316d_add_note_table.py`.
+
 ## Relationships (at a glance)
 
 ```
@@ -126,6 +143,9 @@ Employee     1───* LeaveRequest
 User         1───* Document        (as uploader, optional)
 Employee     1───* Document        (entityType="Employee")
 LeaveRequest 1───* Document        (entityType="LeaveRequest")
+
+Employee     1───* Note            (direct FK, CASCADE on delete)
+User         1───* Note            (as author, optional)
 ```
 
 A `User` is a login credential; an `Employee` is an HR record. They're linked but
@@ -158,10 +178,16 @@ operations. Same verification as the baseline: clean round-trip
 (upgrade → `alembic check` reports zero drift → downgrade) against a disposable
 database.
 
-Neither of the four features added most recently (email notifications, CSV
+Neither of the four features from the previous round (email notifications, CSV
 export, refresh-token revocation, expanded test coverage) needed a schema
 change — token versioning and rate limiting live entirely in Redis, and
 email/CSV are stateless.
+
+Two more migrations followed: `461b8fd7ead7_add_department_open_positions.py`
+(one nullable column) and `866356fc316d_add_note_table.py` (the new `Note`
+table) — same process as the Document migration (autogenerate, hand-trim the
+baseline-vs-legacy-DB cosmetic noise, verify a clean round-trip against a
+disposable database).
 
 ---
 

@@ -35,6 +35,10 @@ for the full matrix).
 | GET/POST | `/employees/me/documents[/upload-url,/confirm]`, `DELETE /employees/me/documents/{docId}` | 🔑 | Own documents — see [File Storage & Email](./08-file-storage-and-email.md) for the upload flow. 404 (via `get_me`) if caller has no linked Employee. |
 | GET/POST | `/employees/{id}/documents[/upload-url,/confirm]` | STAFF_ROLES (GET) / ADMIN_ROLES (POST) | Same flow, on behalf of any employee — e.g. HR uploading a new hire's ID scan. 404 if `id` doesn't exist. |
 | DELETE | `/employees/{id}/documents/{docId}` | SUPER_ADMIN, HR_ADMIN | |
+| GET | `/employees/{id}/activity` | 🔑 (self) or STAFF_ROLES (anyone) | An employee viewing their own record, or SUPER_ADMIN/HR_ADMIN/MANAGER viewing anyone's. 404 (not 403) for a non-staff caller viewing someone else's. Merges Employee-scoped and LeaveRequest-scoped audit entries, paginated. |
+| GET | `/employees/{id}/notes` | SUPER_ADMIN, HR_ADMIN, MANAGER | Internal HR notes — deliberately staff-only, never shown to the employee about themselves. |
+| POST | `/employees/{id}/notes` | SUPER_ADMIN, HR_ADMIN, MANAGER | `{body}`. Audit-logged (`EMPLOYEE_NOTE_CREATED`). |
+| DELETE | `/employees/{id}/notes/{noteId}` | SUPER_ADMIN, HR_ADMIN, MANAGER | Audit-logged (`EMPLOYEE_NOTE_DELETED`). |
 
 ## Departments (`/departments`) — `departments.py` → `departments_service.py`
 
@@ -42,8 +46,8 @@ for the full matrix).
 |---|---|---|---|
 | GET | `/departments` | 🔑 | List, each enriched with `employeeCount` and `manager` (the first Employee in that department whose linked User has role `MANAGER`). |
 | GET | `/departments/{id}` | 🔑 | Single, same enrichment. |
-| POST | `/departments` | SUPER_ADMIN, HR_ADMIN | `{name}`. Attached to the (single) Organization. |
-| PATCH | `/departments/{id}` | SUPER_ADMIN, HR_ADMIN | `{name?}`. |
+| POST | `/departments` | SUPER_ADMIN, HR_ADMIN | `{name, openPositions?}`. Attached to the (single) Organization. |
+| PATCH | `/departments/{id}` | SUPER_ADMIN, HR_ADMIN | `{name?, openPositions?}`. |
 | DELETE | `/departments/{id}` | SUPER_ADMIN | |
 
 ## Leave (`/leave`) — `leave.py` → `leave_service.py`
@@ -70,7 +74,7 @@ for the full matrix).
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/dashboard/summary` | 🔑 | Org-wide view (headcount, departments, leave pipeline counts, department breakdown) for SUPER_ADMIN/HR_ADMIN/MANAGER; personal view (own pending/approved leave, unread notifications) for EMPLOYEE. **Redis-cached**, see [Redis Usage](./07-redis.md). |
+| GET | `/dashboard/summary` | 🔑 | Org-wide view (headcount, departments, leave pipeline counts, department breakdown, `presentToday`/`onLeaveToday` — active employees minus those on an approved leave covering today, zero new schema) for SUPER_ADMIN/HR_ADMIN/MANAGER; personal view (own pending/approved leave, unread notifications) for EMPLOYEE. **Redis-cached**, see [Redis Usage](./07-redis.md). |
 | GET | `/dashboard/trends` | SUPER_ADMIN, HR_ADMIN, MANAGER | 12-month rolling: employee growth, monthly hiring, leave requests by status per month. Not cached. |
 | GET | `/dashboard/activity` | SUPER_ADMIN, HR_ADMIN, MANAGER | Last 15 events (leave decisions + new hires), merged and sorted by timestamp. Not cached. |
 | GET | `/dashboard/trends/export` | SUPER_ADMIN, HR_ADMIN, MANAGER | Same data as `/trends`, as a downloadable CSV (`Content-Disposition: attachment`). See **CSV exports** below. |

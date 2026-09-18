@@ -10,6 +10,7 @@ def _to_raw(department: Department) -> dict:
     return {
         "id": department.id,
         "name": department.name,
+        "openPositions": department.open_positions,
         "organizationId": department.organization_id,
         "createdAt": department.created_at,
     }
@@ -61,12 +62,12 @@ async def get_department(db: AsyncSession, department_id: str) -> dict:
     return await _to_enriched(db, department)
 
 
-async def create_department(db: AsyncSession, *, name: str) -> dict:
+async def create_department(db: AsyncSession, *, name: str, open_positions: int | None = None) -> dict:
     organization = (await db.execute(select(Organization))).scalars().first()
     if organization is None:
         raise AppError("No organization configured", 500)
 
-    department = Department(name=name, organization_id=organization.id)
+    department = Department(name=name, organization_id=organization.id, open_positions=open_positions)
     db.add(department)
     await db.commit()
     await db.refresh(department)
@@ -74,7 +75,9 @@ async def create_department(db: AsyncSession, *, name: str) -> dict:
     return _to_raw(department)
 
 
-async def update_department(db: AsyncSession, department_id: str, *, name: str | None) -> dict:
+async def update_department(
+    db: AsyncSession, department_id: str, *, name: str | None, open_positions: int | None = None
+) -> dict:
     department = (
         await db.execute(select(Department).where(Department.id == department_id))
     ).scalar_one_or_none()
@@ -83,6 +86,8 @@ async def update_department(db: AsyncSession, department_id: str, *, name: str |
 
     if name is not None:
         department.name = name
+    if open_positions is not None:
+        department.open_positions = open_positions
 
     await db.commit()
     await db.refresh(department)

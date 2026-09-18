@@ -74,11 +74,28 @@ async def get_summary(db: AsyncSession, user: CurrentUser) -> dict:
 
 
 async def _org_summary(db: AsyncSession) -> dict:
-    thirty_days_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    thirty_days_ago = now - timedelta(days=30)
 
     total_employees = (await db.execute(select(func.count()).select_from(Employee))).scalar_one()
     active_employees = (
         await db.execute(select(func.count()).select_from(Employee).where(Employee.status == "ACTIVE"))
+    ).scalar_one()
+    # "Today's attendance" proxy: no clock-in/out system exists, so this is
+    # active employees minus those currently on an approved leave — zero new
+    # schema, just a query against data that already exists.
+    on_leave_today = (
+        await db.execute(
+            select(func.count())
+            .select_from(LeaveRequest)
+            .join(Employee, Employee.id == LeaveRequest.employee_id)
+            .where(
+                LeaveRequest.status == "APPROVED",
+                LeaveRequest.start_date <= now,
+                LeaveRequest.end_date >= now,
+                Employee.status == "ACTIVE",
+            )
+        )
     ).scalar_one()
     pending = (
         await db.execute(select(func.count()).select_from(LeaveRequest).where(LeaveRequest.status == "PENDING"))
@@ -113,6 +130,8 @@ async def _org_summary(db: AsyncSession) -> dict:
         "rejectedLeaveRequests": rejected,
         "newEmployees": new_employees,
         "departmentBreakdown": department_breakdown,
+        "presentToday": active_employees - on_leave_today,
+        "onLeaveToday": on_leave_today,
     }
 
 

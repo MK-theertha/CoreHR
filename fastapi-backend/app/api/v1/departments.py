@@ -25,7 +25,7 @@ async def create_department(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(require_roles("SUPER_ADMIN", "HR_ADMIN")),
 ):
-    return ok(await departments_service.create_department(db, name=body.name))
+    return ok(await departments_service.create_department(db, name=body.name, open_positions=body.openPositions))
 
 
 @router.patch("/{department_id}")
@@ -35,7 +35,11 @@ async def update_department(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(require_roles("SUPER_ADMIN", "HR_ADMIN")),
 ):
-    return ok(await departments_service.update_department(db, department_id, name=body.name))
+    return ok(
+        await departments_service.update_department(
+            db, department_id, name=body.name, open_positions=body.openPositions
+        )
+    )
 
 
 @router.delete("/{department_id}")
