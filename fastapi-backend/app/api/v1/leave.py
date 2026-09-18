@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
@@ -29,10 +29,11 @@ async def list_leave_requests(
 async def create_leave_request(
     request: Request,
     body: CreateLeaveRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return ok(await leave_service.create(db, user.id, body, _actor(request, user)))
+    return ok(await leave_service.create(db, user.id, body, _actor(request, user), background_tasks))
 
 
 @router.patch("/{leave_id}/approve")
@@ -40,10 +41,15 @@ async def approve_leave_request(
     leave_id: str,
     request: Request,
     body: DecideLeaveRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(require_roles("SUPER_ADMIN", "HR_ADMIN", "MANAGER")),
 ):
-    return ok(await leave_service.decide(db, leave_id, user.id, "APPROVED", body.comments, _actor(request, user)))
+    return ok(
+        await leave_service.decide(
+            db, leave_id, user.id, "APPROVED", body.comments, _actor(request, user), background_tasks
+        )
+    )
 
 
 @router.patch("/{leave_id}/reject")
@@ -51,20 +57,26 @@ async def reject_leave_request(
     leave_id: str,
     request: Request,
     body: DecideLeaveRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(require_roles("SUPER_ADMIN", "HR_ADMIN", "MANAGER")),
 ):
-    return ok(await leave_service.decide(db, leave_id, user.id, "REJECTED", body.comments, _actor(request, user)))
+    return ok(
+        await leave_service.decide(
+            db, leave_id, user.id, "REJECTED", body.comments, _actor(request, user), background_tasks
+        )
+    )
 
 
 @router.patch("/{leave_id}/cancel")
 async def cancel_leave_request(
     leave_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return ok(await leave_service.cancel(db, leave_id, user.id, _actor(request, user)))
+    return ok(await leave_service.cancel(db, leave_id, user.id, _actor(request, user), background_tasks))
 
 
 @router.post("/{leave_id}/documents/upload-url")

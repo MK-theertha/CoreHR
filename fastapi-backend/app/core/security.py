@@ -43,8 +43,10 @@ def sign_access_token(*, sub: str, email: str, role: str, organization_id: str |
     )
 
 
-def sign_refresh_token(*, sub: str) -> str:
-    return sign_token({"sub": sub, "type": "refresh"}, settings.jwt_refresh_secret, settings.jwt_refresh_ttl)
+def sign_refresh_token(*, sub: str, ver: int = 0) -> str:
+    return sign_token(
+        {"sub": sub, "type": "refresh", "ver": ver}, settings.jwt_refresh_secret, settings.jwt_refresh_ttl
+    )
 
 
 def decode_access_token(token: str) -> dict[str, Any]:

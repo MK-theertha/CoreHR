@@ -1,5 +1,6 @@
 from typing import Literal
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -7,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.core.errors import AppError
 from app.core.util import to_naive_utc
 from app.db.models import Employee, LeaveRequest
-from app.services import audit_service, dashboard_service, notification_service
+from app.services import audit_service, dashboard_service, email_service, notification_service
 from app.services.audit_service import Actor
 
 CAN_MANAGE = {"SUPER_ADMIN", "HR_ADMIN", "MANAGER"}
@@ -75,7 +76,9 @@ async def list_for_user(db: AsyncSession, user, employee_id: str | None) -> list
     return [_serialize(lr) for lr in leave_requests]
 
 
-async def create(db: AsyncSession, user_id: str, payload, actor: Actor | None) -> dict:
+async def create(
+    db: AsyncSession, user_id: str, payload, actor: Actor | None, background_tasks: BackgroundTasks | None = None
+) -> dict:
     own_employee = (
         await db.execute(select(Employee).where(Employee.user_id == user_id))
     ).scalar_one_or_none()
@@ -113,6 +116,16 @@ async def create(db: AsyncSession, user_id: str, payload, actor: Actor | None) -
     await db.refresh(leave_request, attribute_names=["employee"])
     await dashboard_service.invalidate_org_summary_cache()
     await dashboard_service.invalidate_personal_summary_cache(user_id)
+
+    if background_tasks is not None:
+        background_tasks.add_task(
+            email_service.send_leave_requested,
+            leave_request.employee.email,
+            leave_type=payload.leaveType,
+            start_date=payload.startDate.isoformat(),
+            end_date=payload.endDate.isoformat(),
+        )
+
     return _serialize(leave_request)
 
 
@@ -123,6 +136,7 @@ async def decide(
     status: Literal["APPROVED", "REJECTED"],
     comments: str | None,
     actor: Actor | None,
+    background_tasks: BackgroundTasks | None = None,
 ) -> dict:
     leave_request = (
         await db.execute(
@@ -153,11 +167,12 @@ async def decide(
         metadata={"comments": comments},
     )
 
+    decided_word = "approved" if status == "APPROVED" else "rejected"
+    message = f"Your {leave_request.leave_type} request has been {decided_word}."
+    if comments:
+        message += f" Comment: {comments}"
+
     if leave_request.employee.user_id is not None:
-        decided_word = "approved" if status == "APPROVED" else "rejected"
-        message = f"Your {leave_request.leave_type} request has been {decided_word}."
-        if comments:
-            message += f" Comment: {comments}"
         notification_service.create(
             db,
             user_id=leave_request.employee.user_id,
@@ -172,10 +187,21 @@ async def decide(
     # Affects both the deciding-on employee's pending/approved counts and
     # their unread-notifications count (they were just notified above).
     await dashboard_service.invalidate_personal_summary_cache(leave_request.employee.user_id)
+
+    if background_tasks is not None:
+        background_tasks.add_task(
+            email_service.send_leave_decided,
+            leave_request.employee.email,
+            message=message,
+            approved=status == "APPROVED",
+        )
+
     return _serialize(leave_request)
 
 
-async def cancel(db: AsyncSession, leave_id: str, user_id: str, actor: Actor | None) -> dict:
+async def cancel(
+    db: AsyncSession, leave_id: str, user_id: str, actor: Actor | None, background_tasks: BackgroundTasks | None = None
+) -> dict:
     own_employee = (
         await db.execute(select(Employee).where(Employee.user_id == user_id))
     ).scalar_one_or_none()
@@ -209,4 +235,12 @@ async def cancel(db: AsyncSession, leave_id: str, user_id: str, actor: Actor | N
     await db.refresh(leave_request, attribute_names=["employee"])
     await dashboard_service.invalidate_org_summary_cache()
     await dashboard_service.invalidate_personal_summary_cache(user_id)
+
+    if background_tasks is not None:
+        background_tasks.add_task(
+            email_service.send_leave_cancelled,
+            leave_request.employee.email,
+            leave_type=leave_request.leave_type,
+        )
+
     return _serialize(leave_request)

@@ -1,8 +1,12 @@
+import logging
+
 import jwt as pyjwt
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.core.redis import get_redis
 from app.core.security import (
     decode_refresh_token,
     hash_password,
@@ -11,6 +15,37 @@ from app.core.security import (
     verify_password,
 )
 from app.db.models import Employee, Organization, User
+
+logger = logging.getLogger("corehr.auth")
+
+# -1 is a sentinel meaning "couldn't read the version from Redis" — never
+# treated as a real version, so a Redis outage fails refresh-token checks
+# open rather than locking everyone out (consistent with the fail-open
+# convention used for Redis elsewhere, e.g. dashboard_service.py).
+_VERSION_UNKNOWN = -1
+
+
+def _token_version_key(user_id: str) -> str:
+    return f"token_version:{user_id}"
+
+
+async def get_token_version(user_id: str) -> int:
+    try:
+        raw = await get_redis().get(_token_version_key(user_id))
+        return int(raw) if raw is not None else 0
+    except RedisError:
+        logger.warning("token_version read failed for %s; treating refresh token as valid", user_id)
+        return _VERSION_UNKNOWN
+
+
+async def bump_token_version(user_id: str) -> None:
+    """Invalidates every outstanding refresh token for this user — the only
+    session model this app has is a single httpOnly-cookie refresh token, so
+    this doubles as both "logout" and "logout everywhere"."""
+    try:
+        await get_redis().incr(_token_version_key(user_id))
+    except RedisError:
+        logger.warning("logout: token_version bump failed for %s (Redis down); cookie still cleared", user_id)
 
 
 def to_public_user(user: User) -> dict:
@@ -23,9 +58,10 @@ def to_public_user(user: User) -> dict:
     }
 
 
-def _issue_tokens(user: User) -> tuple[str, str]:
+async def _issue_tokens(user: User) -> tuple[str, str]:
     access_token = sign_access_token(sub=user.id, email=user.email, role=user.role, organization_id=user.organization_id)
-    refresh_token = sign_refresh_token(sub=user.id)
+    ver = await get_token_version(user.id)
+    refresh_token = sign_refresh_token(sub=user.id, ver=ver if ver != _VERSION_UNKNOWN else 0)
     return access_token, refresh_token
 
 
@@ -57,7 +93,7 @@ async def register(db: AsyncSession, *, name: str, email: str, password: str) ->
     await db.commit()
     await db.refresh(user)
 
-    access_token, refresh_token = _issue_tokens(user)
+    access_token, refresh_token = await _issue_tokens(user)
     return {"user": to_public_user(user), "accessToken": access_token, "refreshToken": refresh_token}
 
 
@@ -67,7 +103,7 @@ async def login(db: AsyncSession, *, email: str, password: str) -> dict:
     if user is None or not verify_password(password, user.password_hash):
         raise AppError("Invalid credentials", 401)
 
-    access_token, refresh_token = _issue_tokens(user)
+    access_token, refresh_token = await _issue_tokens(user)
     return {"user": to_public_user(user), "accessToken": access_token, "refreshToken": refresh_token}
 
 
@@ -81,6 +117,10 @@ async def refresh(db: AsyncSession, *, refresh_token: str) -> dict:
 
     user = (await db.execute(select(User).where(User.id == payload["sub"]))).scalar_one_or_none()
     if user is None:
+        raise AppError("Invalid refresh token", 401)
+
+    current_ver = await get_token_version(user.id)
+    if current_ver != _VERSION_UNKNOWN and payload.get("ver", 0) != current_ver:
         raise AppError("Invalid refresh token", 401)
 
     access_token = sign_access_token(sub=user.id, email=user.email, role=user.role, organization_id=user.organization_id)

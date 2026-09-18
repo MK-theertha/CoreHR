@@ -1,9 +1,10 @@
+import jwt as pyjwt
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.core.security import parse_duration_seconds
+from app.core.security import decode_refresh_token, parse_duration_seconds
 from app.deps import CurrentUser, get_current_user, get_db
 from app.schemas.auth import LoginRequest, RegisterRequest
 from app.schemas.common import ok
@@ -51,7 +52,14 @@ async def refresh(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if refresh_token:
+        try:
+            payload = decode_refresh_token(refresh_token)
+            await auth_service.bump_token_version(payload["sub"])
+        except pyjwt.PyJWTError:
+            pass  # garbage/expired cookie — nothing to revoke
     response.delete_cookie(key=REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
     return ok(None)
 

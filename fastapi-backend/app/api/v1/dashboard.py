@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.csv_export import dict_rows_to_csv_response
 from app.deps import CurrentUser, get_current_user, get_db, require_roles
 from app.schemas.common import ok
 from app.services import dashboard_service
@@ -16,6 +17,12 @@ async def summary(user: CurrentUser = Depends(get_current_user), db: AsyncSessio
 @router.get("/trends", dependencies=[Depends(require_roles("SUPER_ADMIN", "HR_ADMIN", "MANAGER"))])
 async def trends(db: AsyncSession = Depends(get_db)):
     return ok(await dashboard_service.get_trends(db))
+
+
+@router.get("/trends/export", dependencies=[Depends(require_roles("SUPER_ADMIN", "HR_ADMIN", "MANAGER"))])
+async def export_trends(db: AsyncSession = Depends(get_db)):
+    data = await dashboard_service.get_trends(db)
+    return dict_rows_to_csv_response(data, filename="dashboard-trends.csv")
 
 
 @router.get("/activity", dependencies=[Depends(require_roles("SUPER_ADMIN", "HR_ADMIN", "MANAGER"))])

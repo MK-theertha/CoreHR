@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     aws_region: str = "ap-south-1"
     s3_uploads_bucket: str = ""
 
+    email_enabled: bool = False
+    ses_from_email: str = ""
+
     @model_validator(mode="after")
     def _reject_insecure_defaults_in_production(self) -> "Settings":
         if not self.is_production:
